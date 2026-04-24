@@ -1,20 +1,42 @@
 # Sistema de cadastro, leitura e vendas de livros
 
-Aplicação **Flask** monolítica (MVC) com **Jinja2 + Bootstrap**, **Flask-Login** (sessões na interface web) e **API JSON com JWT** para integrações. Base de dados **SQLite** via **SQLAlchemy**, conforme a descrição do projeto (`Descricao_Projeto_Livros.docx`).
+Aplicação **Flask** monolítica (MVC) com **Jinja2 + Bootstrap**, **Flask-Login** (sessões na interface web) e **API JSON com JWT** para integrações. Base de dados **PostgreSQL** (ou SQLite) via **SQLAlchemy** e **Flask-Migrate**.
 
 ## Pré-requisitos
 
 - Python 3.10+ (testado com 3.12 / 3.14)
 - `venv` recomendado
+- PostgreSQL (caso opte pelo banco de dados em produção/docker)
 
 ## Configuração
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
-# Edite .env: SECRET_KEY, JWT_SECRET_KEY (≥32 caracteres), ADMIN_*
+# Edite .env: 
+# DATABASE_URI (Postgres: postgresql+psycopg://user:pass@localhost:5432/dbname)
+# SECRET_KEY, JWT_SECRET_KEY (≥32 caracteres), ADMIN_*
+```
+
+## Banco de Dados e Migrações
+
+O projeto utiliza **Flask-Migrate** (Alembic) para gerir o esquema do banco de dados.
+
+### Inicialização (Primeira vez)
+Se a pasta `migrations/` não existir ou se quiser recriar o banco:
+```bash
+flask db init
+flask db migrate -m "Initial migration"
+flask db upgrade
+```
+
+### Atualização do Esquema
+Sempre que houver alterações nos modelos (`app/models/`):
+```bash
+flask db migrate -m "Descrição da alteração"
+flask db upgrade
 ```
 
 ## Executar em desenvolvimento
@@ -24,19 +46,15 @@ python run.py
 ```
 
 - Interface web: `http://127.0.0.1:5000/`
-- Ao importar `run`, as tabelas são criadas e o administrador inicial é semeado (Gunicorn incluído).
-- SQLite por omissão: `instance/database.db` (pasta `instance/` criada automaticamente).
-
-Variáveis úteis: `FLASK_DEBUG` (1 ou 0), `PORT` (omissão 5000), `DATABASE_URI` (opcional).
+- O administrador inicial é criado automaticamente no arranque baseado nas variáveis `ADMIN_INITIAL_EMAIL` e `ADMIN_INITIAL_PASSWORD` do `.env`.
+- Uploads: Imagens de perfil e capas de livros são guardadas em `app/static/uploads/`.
 
 ## Docker
 
 ```bash
-docker compose build
-docker compose up
+docker compose up -d
 ```
-
-O volume `./instance` mantém a base de dados entre reinícios.
+O Docker Compose já sobe o banco **PostgreSQL** e a aplicação **Flask** configurados.
 
 ## Testes
 
