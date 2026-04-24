@@ -9,7 +9,6 @@ from app.models.user import User
 
 app = create_app()
 
-
 def criar_admin_inicial():
     admin_email = os.environ.get("ADMIN_INITIAL_EMAIL")
     admin_senha = os.environ.get("ADMIN_INITIAL_PASSWORD")
@@ -34,10 +33,8 @@ def criar_admin_inicial():
         else:
             print("Admin inicial já existe.")
 
-
 # Criar admin inicial ao carregar o módulo
-with app.app_context():
-    criar_admin_inicial()
+criar_admin_inicial()
 
 if __name__ == "__main__":
     debug = os.environ.get("FLASK_DEBUG", "1") not in ("0", "false", "False")
