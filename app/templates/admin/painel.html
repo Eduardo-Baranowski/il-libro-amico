@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Administração{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">Painel de administração</h1>
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card h-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 card-title">Utilizadores</h2>
+        <p class="card-text text-muted">Criar, editar ou remover contas (admin, editora, leitor).</p>
+        <a class="btn btn-primary" href="{{ url_for('site.admin_usuarios') }}">Gerir</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 card-title">Relatórios</h2>
+        <p class="card-text text-muted">Resumo de utilizadores, solicitações e livros.</p>
+        <a class="btn btn-outline-primary" href="{{ url_for('site.admin_relatorios') }}">Ver relatórios</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

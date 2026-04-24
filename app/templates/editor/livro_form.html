@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{% if livro %}Editar livro{% else %}Novo livro{% endif %}{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">{% if livro %}Editar livro{% else %}Novo livro{% endif %}</h1>
+<div class="card shadow-sm col-lg-8">
+  <div class="card-body">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label" for="titulo">Título</label>
+        <input class="form-control" name="titulo" id="titulo" required maxlength="200" value="{{ livro.titulo if livro else '' }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="autor">Autor</label>
+        <input class="form-control" name="autor" id="autor" required maxlength="200" value="{{ livro.autor if livro else '' }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="preco">Preço (€)</label>
+        <input class="form-control" name="preco" id="preco" required inputmode="decimal" placeholder="12.90" value="{% if livro %}{{ '%.2f' % livro.preco }}{% endif %}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="descricao">Descrição <span class="text-muted">(opcional)</span></label>
+        <textarea class="form-control" name="descricao" id="descricao" rows="3">{{ livro.descricao if livro and livro.descricao else '' }}</textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Guardar</button>
+      <a class="btn btn-link" href="{{ url_for('site.painel_editor') }}">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Solicitação #{{ sol.id }}{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">Solicitação #{{ sol.id }}</h1>
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <p><strong>Estado:</strong> <span class="badge bg-{{ 'success' if sol.status == 'respondida' else 'warning' }}">{{ sol.status }}</span></p>
+    <p><strong>Leitor:</strong> {{ sol.leitor.nome if sol.leitor else sol.leitor_id }} ({{ sol.leitor.email if sol.leitor else '' }})</p>
+    <p><strong>Data:</strong> {{ sol.data_criacao }}</p>
+    <hr>
+    <p><strong>Mensagem do leitor</strong></p>
+    <p class="mb-0" style="white-space: pre-wrap;">{{ sol.conteudo }}</p>
+  </div>
+</div>
+{% if sol.status == 'respondida' %}
+  <div class="alert alert-info"><strong>Resposta enviada:</strong><br><span style="white-space: pre-wrap;">{{ sol.resposta }}</span></div>
+  <a class="btn btn-secondary" href="{{ url_for('site.painel_editor') }}">Voltar</a>
+{% else %}
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <form method="post">
+        <div class="mb-3">
+          <label class="form-label" for="resposta">Resposta</label>
+          <textarea class="form-control" name="resposta" id="resposta" rows="5" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Enviar resposta</button>
+        <a class="btn btn-link" href="{{ url_for('site.painel_editor') }}">Cancelar</a>
+      </form>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

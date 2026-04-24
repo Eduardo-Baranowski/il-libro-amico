@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Início — Livros{% endblock %}
+{% block content %}
+<div class="p-5 mb-4 bg-white rounded shadow-sm">
+  <h1 class="display-6">Sistema de cadastro, leitura e vendas de livros</h1>
+  <p class="lead text-muted">Interface web (Flask + Bootstrap) com perfis de administrador, editora e leitor.</p>
+  <hr>
+  <p>Leitores podem criar conta e enviar solicitações às editoras. As editoras respondem e gerem o catálogo de livros. O administrador gere utilizadores e consulta relatórios.</p>
+  <div class="d-flex gap-2 flex-wrap mt-4">
+    <a class="btn btn-primary" href="{{ url_for('site.entrar') }}">Entrar</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('site.cadastro') }}">Registo de leitor</a>
+  </div>
+  <p class="small text-muted mt-4 mb-0">API JSON (JWT) continua disponível em <code>/auth</code>, <code>/admin</code>, <code>/reader</code> e <code>/editor</code> para integrações.</p>
+</div>
+{% endblock %}

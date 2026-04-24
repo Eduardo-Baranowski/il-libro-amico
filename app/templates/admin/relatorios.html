@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Relatórios{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">Relatórios gerenciais</h1>
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card shadow-sm"><div class="card-body">
+      <h2 class="h6 text-muted">Total de utilizadores</h2>
+      <p class="display-6 mb-0">{{ total_usuarios }}</p>
+    </div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm"><div class="card-body">
+      <h2 class="h6 text-muted">Total de livros (todas as editoras)</h2>
+      <p class="display-6 mb-0">{{ total_livros }}</p>
+    </div></div>
+  </div>
+</div>
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header">Utilizadores por papel</div>
+      <ul class="list-group list-group-flush">
+        {% for papel, n in usuarios_por_papel.items() %}
+        <li class="list-group-item d-flex justify-content-between">{{ papel }} <span class="badge bg-primary rounded-pill">{{ n }}</span></li>
+        {% else %}
+        <li class="list-group-item text-muted">Sem dados</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header">Solicitações por estado</div>
+      <ul class="list-group list-group-flush">
+        {% for st, n in solicitacoes_por_status.items() %}
+        <li class="list-group-item d-flex justify-content-between">{{ st }} <span class="badge bg-secondary rounded-pill">{{ n }}</span></li>
+        {% else %}
+        <li class="list-group-item text-muted">Sem solicitações</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+<p class="mt-4"><a href="{{ url_for('site.painel_admin') }}">← Voltar ao painel</a></p>
+{% endblock %}
