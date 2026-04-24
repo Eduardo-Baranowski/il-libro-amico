@@ -1,10 +1,27 @@
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user_livro
+      POSTGRES_PASSWORD: senha_segura_123
+      POSTGRES_DB: il_libro_amico_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   web:
     build: .
     ports:
       - "5000:5000"
     env_file:
       - .env
+    depends_on:
+      - db
     volumes:
       - ./instance:/app/instance
     restart: unless-stopped
+
+volumes:
+  postgres_data:

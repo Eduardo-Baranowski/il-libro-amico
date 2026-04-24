@@ -7,7 +7,7 @@ from .. import db, bcrypt
 from ..models.user import User
 from ..models.request import Request
 from ..models.livro import Livro
-from ..utils import papel_requerido, url_painel_por_papel
+from ..utils import papel_requerido, url_painel_por_papel, save_image
 
 site_bp = Blueprint("site", __name__)
 
@@ -56,16 +56,20 @@ def cadastro():
         nome = (request.form.get("nome") or "").strip()
         email = (request.form.get("email") or "").strip()
         senha = request.form.get("senha") or ""
+        file = request.files.get("imagem")
+        
         if not nome or not email or not senha:
             flash("Preencha nome, email e senha.", "warning")
         elif User.query.filter_by(email=email).first():
             flash("Este email já está cadastrado.", "warning")
         else:
+            imagem_path = save_image(file, "users")
             u = User(
                 nome=nome,
                 email=email,
                 senha_hash=bcrypt.generate_password_hash(senha).decode("utf-8"),
                 papel="leitor",
+                imagem=imagem_path
             )
             db.session.add(u)
             db.session.commit()
@@ -163,6 +167,8 @@ def livro_form(lid=None):
         autor = (request.form.get("autor") or "").strip()
         descricao = (request.form.get("descricao") or "").strip() or None
         preco_raw = (request.form.get("preco") or "").strip().replace(",", ".")
+        file = request.files.get("imagem")
+        
         try:
             preco = Decimal(preco_raw)
         except (InvalidOperation, TypeError):
@@ -173,6 +179,11 @@ def livro_form(lid=None):
             if livro is None:
                 livro = Livro(editor_id=current_user.id)
                 db.session.add(livro)
+            
+            imagem_path = save_image(file, "books")
+            if imagem_path:
+                livro.imagem = imagem_path
+                
             livro.titulo = titulo
             livro.autor = autor
             livro.descricao = descricao
@@ -224,6 +235,7 @@ def admin_usuario_form(uid=None):
         email = (request.form.get("email") or "").strip()
         papel = (request.form.get("papel") or "").strip()
         senha = request.form.get("senha") or ""
+        file = request.files.get("imagem")
 
         if papel not in ("admin", "editor", "leitor"):
             flash("Papel inválido.", "danger")
@@ -238,6 +250,8 @@ def admin_usuario_form(uid=None):
             flash("Nome e email são obrigatórios.", "warning")
             return render_template("admin/usuario_form.html", usuario=usuario, editando=bool(uid))
 
+        imagem_path = save_image(file, "users")
+
         if usuario is None:
             if not senha:
                 flash("Defina uma senha para o novo utilizador.", "warning")
@@ -247,12 +261,15 @@ def admin_usuario_form(uid=None):
                 email=email,
                 senha_hash=bcrypt.generate_password_hash(senha).decode("utf-8"),
                 papel=papel,
+                imagem=imagem_path
             )
             db.session.add(usuario)
         else:
             usuario.nome = nome
             usuario.email = email
             usuario.papel = papel
+            if imagem_path:
+                usuario.imagem = imagem_path
             if senha:
                 usuario.senha_hash = bcrypt.generate_password_hash(senha).decode("utf-8")
 

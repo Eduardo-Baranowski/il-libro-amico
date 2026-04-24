@@ -4,7 +4,16 @@
 <h1 class="h3 mb-3">{% if editando %}Editar utilizador{% else %}Novo utilizador{% endif %}</h1>
 <div class="card shadow-sm col-lg-7">
   <div class="card-body">
-    <form method="post">
+    <form method="post" enctype="multipart/form-data">
+      <div class="mb-3 text-center">
+        {% if usuario and usuario.imagem %}
+          <img src="{{ url_for('static', filename='uploads/' + usuario.imagem) }}" alt="Foto" class="rounded-circle mb-2" style="width: 100px; height: 100px; object-fit: cover;">
+        {% else %}
+          <div class="bg-light rounded-circle mx-auto mb-2 d-flex align-items-center justify-content-center" style="width: 100px; height: 100px;">
+            <i class="bi bi-person text-secondary h1"></i>
+          </div>
+        {% endif %}
+      </div>
       <div class="mb-3">
         <label class="form-label" for="nome">Nome</label>
         <input class="form-control" name="nome" id="nome" required value="{{ usuario.nome if usuario else '' }}">
@@ -25,6 +34,10 @@
         <label class="form-label" for="senha">Senha</label>
         <input class="form-control" type="password" name="senha" id="senha" autocomplete="new-password" {% if not editando %}required{% endif %}>
         <div class="form-text">{% if editando %}Deixe em branco para manter a senha atual.{% else %}Obrigatório para novo utilizador.{% endif %}</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="imagem">Foto de perfil</label>
+        <input class="form-control" type="file" name="imagem" id="imagem" accept="image/*">
       </div>
       <button type="submit" class="btn btn-primary">Guardar</button>
       <a class="btn btn-link" href="{{ url_for('site.admin_usuarios') }}">Cancelar</a>

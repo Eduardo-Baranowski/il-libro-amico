@@ -4,22 +4,39 @@
 <h1 class="h3 mb-3">{% if livro %}Editar livro{% else %}Novo livro{% endif %}</h1>
 <div class="card shadow-sm col-lg-8">
   <div class="card-body">
-    <form method="post">
-      <div class="mb-3">
-        <label class="form-label" for="titulo">Título</label>
-        <input class="form-control" name="titulo" id="titulo" required maxlength="200" value="{{ livro.titulo if livro else '' }}">
-      </div>
-      <div class="mb-3">
-        <label class="form-label" for="autor">Autor</label>
-        <input class="form-control" name="autor" id="autor" required maxlength="200" value="{{ livro.autor if livro else '' }}">
-      </div>
-      <div class="mb-3">
-        <label class="form-label" for="preco">Preço (€)</label>
-        <input class="form-control" name="preco" id="preco" required inputmode="decimal" placeholder="12.90" value="{% if livro %}{{ '%.2f' % livro.preco }}{% endif %}">
+    <form method="post" enctype="multipart/form-data">
+      <div class="row mb-3">
+        <div class="col-md-4 text-center">
+          {% if livro and livro.imagem %}
+            <img src="{{ url_for('static', filename='uploads/' + livro.imagem) }}" alt="Capa" class="img-fluid rounded shadow-sm mb-2" style="max-height: 200px;">
+          {% else %}
+            <div class="bg-light rounded d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 150px; height: 200px; border: 2px dashed #dee2e6;">
+              <i class="bi bi-book text-secondary h1"></i>
+            </div>
+          {% endif %}
+        </div>
+        <div class="col-md-8">
+          <div class="mb-3">
+            <label class="form-label" for="titulo">Título</label>
+            <input class="form-control" name="titulo" id="titulo" required maxlength="200" value="{{ livro.titulo if livro else '' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="autor">Autor</label>
+            <input class="form-control" name="autor" id="autor" required maxlength="200" value="{{ livro.autor if livro else '' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="preco">Preço (€)</label>
+            <input class="form-control" name="preco" id="preco" required inputmode="decimal" placeholder="12.90" value="{% if livro %}{{ '%.2f' % livro.preco }}{% endif %}">
+          </div>
+        </div>
       </div>
       <div class="mb-3">
         <label class="form-label" for="descricao">Descrição <span class="text-muted">(opcional)</span></label>
         <textarea class="form-control" name="descricao" id="descricao" rows="3">{{ livro.descricao if livro and livro.descricao else '' }}</textarea>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="imagem">Capa do Livro</label>
+        <input class="form-control" type="file" name="imagem" id="imagem" accept="image/*">
       </div>
       <button type="submit" class="btn btn-primary">Guardar</button>
       <a class="btn btn-link" href="{{ url_for('site.painel_editor') }}">Cancelar</a>

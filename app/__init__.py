@@ -6,8 +6,10 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager
 from flask_login import LoginManager
+from flask_migrate import Migrate
 
 db = SQLAlchemy()
+migrate = Migrate()
 bcrypt = Bcrypt()
 jwt = JWTManager()
 login_manager = LoginManager()
@@ -24,6 +26,14 @@ def create_app():
     app = Flask(__name__, instance_relative_config=True)
 
     os.makedirs(app.instance_path, exist_ok=True)
+    
+    # Configurações de Upload
+    app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "static", "uploads")
+    app.config["ALLOWED_EXTENSIONS"] = {"png", "jpg", "jpeg", "gif"}
+    app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # Limite de 5MB
+    
+    os.makedirs(os.path.join(app.config["UPLOAD_FOLDER"], "users"), exist_ok=True)
+    os.makedirs(os.path.join(app.config["UPLOAD_FOLDER"], "books"), exist_ok=True)
 
     db_uri = os.environ.get("DATABASE_URI")
     if not db_uri:
@@ -37,6 +47,7 @@ def create_app():
     app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", app.config["SECRET_KEY"])
 
     db.init_app(app)
+    migrate.init_app(app, db)
     bcrypt.init_app(app)
     jwt.init_app(app)
     login_manager.init_app(app)
@@ -54,7 +65,9 @@ def create_app():
     app.register_blueprint(reader_bp, url_prefix="/reader")
     app.register_blueprint(editor_bp, url_prefix="/editor")
 
-    from .models import livro as _livro  # noqa: F401 — registo de modelo
+    from .models.user import User  # noqa: F401
+    from .models.livro import Livro  # noqa: F401
+    from .models.request import Request  # noqa: F401
 
     @app.errorhandler(403)
     def _forbidden(_e):
