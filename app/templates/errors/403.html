@@ -1,9 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Acesso negado{% endblock %}
-{% block content %}
-<div class="alert alert-danger">
-  <h2 class="h4">403 — Acesso negado</h2>
-  <p class="mb-0">Não tem permissão para ver esta página.</p>
-</div>
-<a class="btn btn-outline-secondary" href="{{ url_for('site.index') }}">Voltar ao início</a>
-{% endblock %}

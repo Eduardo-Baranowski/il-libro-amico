@@ -20,6 +20,31 @@ def verificar_admin(f):
 @jwt_required()
 @verificar_admin
 def list_users():
+    """
+    Listar todos os usuários (Apenas Admin)
+    ---
+    tags:
+      - Admin
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Lista de usuários
+        schema:
+          type: array
+          items:
+            properties:
+              id:
+                type: integer
+              nome:
+                type: string
+              email:
+                type: string
+              papel:
+                type: string
+      403:
+        description: Acesso negado
+    """
     rows = User.query.order_by(User.id).all()
     return jsonify(
         [
@@ -33,6 +58,37 @@ def list_users():
 @jwt_required()
 @verificar_admin
 def create_user():
+    """
+    Criar um novo usuário (Apenas Admin)
+    ---
+    tags:
+      - Admin
+    security:
+      - Bearer: []
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            nome:
+              type: string
+            email:
+              type: string
+            senha:
+              type: string
+            papel:
+              type: string
+              enum: [admin, editor, leitor]
+    responses:
+      201:
+        description: Usuário criado com sucesso
+      400:
+        description: Dados inválidos
+      403:
+        description: Acesso negado
+    """
     data = request.get_json()
     nome = data.get('nome')
     email = data.get('email')
@@ -60,6 +116,19 @@ def create_user():
 @jwt_required()
 @verificar_admin
 def reports():
+    """
+    Obter relatórios do sistema (Apenas Admin)
+    ---
+    tags:
+      - Admin
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Relatórios estatísticos
+      403:
+        description: Acesso negado
+    """
     total_usuarios = User.query.count()
     # Para simplificar o agrupamento por papel e status, poderíamos fazer consultas específicas
     usuarios_por_papel = db.session.query(User.papel, db.func.count(User.id)).group_by(User.papel).all()

@@ -7,6 +7,30 @@ auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
+    """
+    Registrar um novo leitor
+    ---
+    tags:
+      - Autenticação
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            nome:
+              type: string
+            email:
+              type: string
+            senha:
+              type: string
+    responses:
+      201:
+        description: Leitor cadastrado com sucesso
+      400:
+        description: Erro na requisição
+    """
     data = request.get_json() or {}
     nome = data.get('nome')
     email = data.get('email')
@@ -28,6 +52,34 @@ def register():
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
+    """
+    Autenticar usuário e obter token JWT
+    ---
+    tags:
+      - Autenticação
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+            senha:
+              type: string
+    responses:
+      200:
+        description: Login realizado com sucesso
+        schema:
+          properties:
+            token_sessao:
+              type: string
+            papel:
+              type: string
+      401:
+        description: Credenciais inválidas
+    """
     data = request.get_json() or {}
     email = data.get('email')
     senha = data.get('senha')

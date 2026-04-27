@@ -1,0 +1,99 @@
+import { createBrowserRouter, Navigate } from 'react-router-dom'
+
+import { Layout } from './ui/Layout'
+import { RequireAuth } from './ui/RequireAuth'
+
+import { HomePage } from '../pages/public/HomePage'
+import { LoginPage } from '../pages/auth/LoginPage'
+import { RegisterPage } from '../pages/auth/RegisterPage'
+
+import { AdminUsersPage } from '../pages/admin/AdminUsersPage'
+import { AdminReportsPage } from '../pages/admin/AdminReportsPage'
+
+import { ReaderRequestsPage } from '../pages/reader/ReaderRequestsPage'
+import { ReaderNewRequestPage } from '../pages/reader/ReaderNewRequestPage'
+import { ReaderMyReadingsPage } from '../pages/reader/ReaderMyReadingsPage'
+import { ReaderNewReadingPage } from '../pages/reader/ReaderNewReadingPage'
+
+import { EditorRequestsPage } from '../pages/editor/EditorRequestsPage'
+import { EditorBooksPage } from '../pages/editor/EditorBooksPage'
+
+export const router = createBrowserRouter([
+  {
+    element: <Layout />,
+    children: [
+      { path: '/', element: <HomePage /> },
+      { path: '/entrar', element: <LoginPage /> },
+      { path: '/cadastro', element: <RegisterPage /> },
+
+      {
+        path: '/admin/usuarios',
+        element: (
+          <RequireAuth role="admin">
+            <AdminUsersPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/admin/relatorios',
+        element: (
+          <RequireAuth role="admin">
+            <AdminReportsPage />
+          </RequireAuth>
+        ),
+      },
+
+      {
+        path: '/leitor/solicitacoes',
+        element: (
+          <RequireAuth role="leitor">
+            <ReaderRequestsPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/leitor/leituras',
+        element: (
+          <RequireAuth role="leitor">
+            <ReaderMyReadingsPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/leitor/nova-leitura',
+        element: (
+          <RequireAuth role="leitor">
+            <ReaderNewReadingPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/leitor/nova-solicitacao',
+        element: (
+          <RequireAuth role="leitor">
+            <ReaderNewRequestPage />
+          </RequireAuth>
+        ),
+      },
+
+      {
+        path: '/editor/solicitacoes',
+        element: (
+          <RequireAuth role="editor">
+            <EditorRequestsPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/editor/livros',
+        element: (
+          <RequireAuth role="editor">
+            <EditorBooksPage />
+          </RequireAuth>
+        ),
+      },
+
+      { path: '*', element: <Navigate to="/" replace /> },
+    ],
+  },
+])

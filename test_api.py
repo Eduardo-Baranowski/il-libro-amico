@@ -78,11 +78,52 @@ def test_flow():
     assert resp.status_code == 200
     print("Sucesso!")
 
-    # 8. Admin verifica relatórios
-    print("\n8. Admin verifica relatórios...")
+    # 8. Editora cadastra um livro
+    print("\n8. Editora cadastra um livro...")
+    resp = requests.post(f"{BASE_URL}/editor/books", headers=editor_headers, data={
+        "titulo": "Livro de Teste",
+        "autor": "Autor Teste",
+        "preco": "29.90",
+        "descricao": "Uma descrição de teste."
+    })
+    assert resp.status_code == 201
+    livro_id = resp.json()["id"]
+    print(f"Sucesso! livro_id={livro_id}")
+
+    # 9. Editora lista seus livros
+    print("\n9. Editora lista seus livros...")
+    resp = requests.get(f"{BASE_URL}/editor/books", headers=editor_headers)
+    assert resp.status_code == 200
+    assert len(resp.json()) >= 1
+    print("Sucesso!")
+
+    # 10. Público/Leitor lista todos os livros
+    print("\n10. Público/Leitor lista todos os livros...")
+    resp = requests.get(f"{BASE_URL}/reader/books")
+    assert resp.status_code == 200
+    assert len(resp.json()) >= 1
+    print("Sucesso!")
+
+    # 11. Público/Leitor vê detalhes de um livro
+    print(f"\n11. Público/Leitor vê detalhes do livro {livro_id}...")
+    resp = requests.get(f"{BASE_URL}/reader/books/{livro_id}")
+    assert resp.status_code == 200
+    assert resp.json()["titulo"] == "Livro de Teste"
+    print("Sucesso!")
+
+    # 12. Admin verifica relatórios
+    print("\n12. Admin verifica relatórios...")
     resp = requests.get(f"{BASE_URL}/admin/reports", headers=admin_headers)
     assert resp.status_code == 200
-    print("Relatório:", resp.json())
+    relatorio = resp.json()
+    print("Relatório:", relatorio)
+    assert relatorio["total_livros"] >= 1
+    print("Sucesso!")
+
+    # 13. Editora remove o livro
+    print(f"\n13. Editora remove o livro {livro_id}...")
+    resp = requests.delete(f"{BASE_URL}/editor/books/{livro_id}", headers=editor_headers)
+    assert resp.status_code == 200
     print("Sucesso!")
 
     print("\n--- Todos os testes passaram! ---")

@@ -1,33 +1,7 @@
 import os
 import uuid
-from functools import wraps
-from flask import abort, url_for, current_app
-from flask_login import current_user
+from flask import current_app, url_for
 from werkzeug.utils import secure_filename
-
-
-def url_painel_por_papel():
-    if not current_user.is_authenticated:
-        return url_for("site.entrar")
-    p = current_user.papel
-    if p == "admin":
-        return url_for("site.painel_admin")
-    if p == "editor":
-        return url_for("site.painel_editor")
-    return url_for("site.painel_leitor")
-
-
-def papel_requerido(*papeis):
-    def decorator(view_fn):
-        @wraps(view_fn)
-        def wrapped(*args, **kwargs):
-            if current_user.papel not in papeis:
-                abort(403)
-            return view_fn(*args, **kwargs)
-
-        return wrapped
-
-    return decorator
 
 
 def allowed_file(filename):
@@ -49,3 +23,13 @@ def save_image(file, subfolder=""):
         # Retornar o caminho relativo para guardar no BD
         return os.path.join(subfolder, unique_filename) if subfolder else unique_filename
     return None
+
+
+def image_url(rel_path: str | None):
+    """
+    Converte caminho relativo salvo no BD (ex.: 'books/abc.jpg') em URL pública.
+    """
+    if not rel_path:
+        return None
+    rel_path = rel_path.lstrip("/").replace("\\", "/")
+    return url_for("static", filename=f"uploads/{rel_path}", _external=True)
