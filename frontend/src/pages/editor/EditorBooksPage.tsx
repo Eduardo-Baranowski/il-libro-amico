@@ -99,7 +99,7 @@ export function EditorBooksPage() {
                   </div>
                 </div>
                 <div className="row" style={{ alignItems: 'center' }}>
-                  <span className="pill">R$ {b.preco}</span>
+                  <span className="pill primary">R$ {b.preco}</span>
                   <button
                     className="btn secondary"
                     type="button"
@@ -125,25 +125,25 @@ export function EditorBooksPage() {
       <div className="card" style={{ flex: 1, minWidth: 340 }}>
         <h2 style={{ marginTop: 0 }}>Cadastrar novo livro</h2>
 
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div className="stack">
           <div>
-            <label className="muted">Título</label>
+            <label className="label">Título</label>
             <input className="input" value={newBook.titulo} onChange={(e) => setNewBook({ ...newBook, titulo: e.target.value })} />
           </div>
           <div>
-            <label className="muted">Autor</label>
+            <label className="label">Autor</label>
             <input className="input" value={newBook.autor} onChange={(e) => setNewBook({ ...newBook, autor: e.target.value })} />
           </div>
           <div>
-            <label className="muted">Preço</label>
+            <label className="label">Preço</label>
             <input className="input" inputMode="decimal" value={newBook.preco} onChange={(e) => setNewBook({ ...newBook, preco: e.target.value })} />
           </div>
           <div>
-            <label className="muted">Descrição</label>
+            <label className="label">Descrição</label>
             <textarea className="input" rows={3} value={newBook.descricao} onChange={(e) => setNewBook({ ...newBook, descricao: e.target.value })} />
           </div>
           <div>
-            <label className="muted">Imagem (opcional)</label>
+            <label className="label">Imagem (opcional)</label>
             <input className="input" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
 

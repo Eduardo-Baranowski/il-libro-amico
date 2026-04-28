@@ -40,9 +40,9 @@ export function ReaderNewRequestPage() {
       {editorsQ.isLoading ? <p>Carregando editoras…</p> : null}
       {editorsQ.isError ? <p className="error">{(editorsQ.error as any)?.message}</p> : null}
 
-      <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+      <div className="stack" style={{ marginTop: 12 }}>
         <div>
-          <label className="muted">Editora</label>
+          <label className="label">Editora</label>
           <select
             className="input"
             value={editorId}
@@ -58,7 +58,7 @@ export function ReaderNewRequestPage() {
         </div>
 
         <div>
-          <label className="muted">Conteúdo</label>
+          <label className="label">Conteúdo</label>
           <textarea
             className="input"
             rows={5}
@@ -68,7 +68,7 @@ export function ReaderNewRequestPage() {
         </div>
 
         {err ? <div className="error">{err}</div> : null}
-        {ok ? <div style={{ color: '#166534' }}>{ok}</div> : null}
+        {ok ? <div className="success">{ok}</div> : null}
 
         <button className="btn" type="button" onClick={() => sendM.mutate()} disabled={sendM.isPending}>
           {sendM.isPending ? 'Enviando…' : 'Enviar'}

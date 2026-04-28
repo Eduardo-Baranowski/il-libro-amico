@@ -42,25 +42,25 @@ export function RegisterPage() {
   return (
     <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
       <h1 style={{ marginTop: 0 }}>Cadastro (leitor)</h1>
-      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 12 }}>
+      <form onSubmit={onSubmit} className="stack">
         <div>
-          <label className="muted">Nome</label>
+          <label className="label">Nome</label>
           <input className="input" {...form.register('nome')} />
           <div className="error">{form.formState.errors.nome?.message}</div>
         </div>
         <div>
-          <label className="muted">Email</label>
+          <label className="label">Email</label>
           <input className="input" type="email" {...form.register('email')} />
           <div className="error">{form.formState.errors.email?.message}</div>
         </div>
         <div>
-          <label className="muted">Senha</label>
+          <label className="label">Senha</label>
           <input className="input" type="password" {...form.register('senha')} />
           <div className="error">{form.formState.errors.senha?.message}</div>
         </div>
 
         {err ? <div className="error">{err}</div> : null}
-        {ok ? <div style={{ color: '#166534' }}>{ok}</div> : null}
+        {ok ? <div className="success">{ok}</div> : null}
 
         <button className="btn" type="submit" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? 'Criando…' : 'Criar conta'}

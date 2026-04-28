@@ -20,8 +20,8 @@ export function AdminReportsPage() {
         <h1 style={{ marginTop: 0 }}>Relatórios</h1>
         <p className="muted">Resumo do sistema.</p>
         <div className="row" style={{ marginTop: 12 }}>
-          <span className="pill">Total usuários: {r.total_usuarios}</span>
-          <span className="pill">Total livros: {r.total_livros}</span>
+          <span className="pill primary">Total usuários: {r.total_usuarios}</span>
+          <span className="pill primary">Total livros: {r.total_livros}</span>
         </div>
       </div>
 

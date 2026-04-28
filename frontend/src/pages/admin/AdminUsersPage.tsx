@@ -39,7 +39,7 @@ export function AdminUsersPage() {
 
         {usersQ.data ? (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table>
               <thead>
                 <tr>
                   <th align="left">ID</th>
@@ -55,7 +55,7 @@ export function AdminUsersPage() {
                     <td>{u.nome}</td>
                     <td>{u.email}</td>
                     <td>
-                      <span className="pill">{u.papel}</span>
+                      <span className="pill primary">{u.papel}</span>
                     </td>
                   </tr>
                 ))}
@@ -67,21 +67,21 @@ export function AdminUsersPage() {
 
       <div className="card" style={{ flex: 1, minWidth: 320 }}>
         <h2 style={{ marginTop: 0 }}>Criar usuário</h2>
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div className="stack">
           <div>
-            <label className="muted">Nome</label>
+            <label className="label">Nome</label>
             <input className="input" value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
           </div>
           <div>
-            <label className="muted">Email</label>
+            <label className="label">Email</label>
             <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </div>
           <div>
-            <label className="muted">Senha</label>
+            <label className="label">Senha</label>
             <input className="input" type="password" value={form.senha} onChange={(e) => setForm({ ...form, senha: e.target.value })} />
           </div>
           <div>
-            <label className="muted">Papel</label>
+            <label className="label">Papel</label>
             <select className="input" value={form.papel} onChange={(e) => setForm({ ...form, papel: e.target.value as Role })}>
               <option value="admin">admin</option>
               <option value="editor">editor</option>

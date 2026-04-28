@@ -42,14 +42,14 @@ export function LoginPage() {
   return (
     <div className="card" style={{ maxWidth: 520, margin: '0 auto' }}>
       <h1 style={{ marginTop: 0 }}>Entrar</h1>
-      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 12 }}>
+      <form onSubmit={onSubmit} className="stack">
         <div>
-          <label className="muted">Email</label>
+          <label className="label">Email</label>
           <input className="input" type="email" {...form.register('email')} />
           <div className="error">{form.formState.errors.email?.message}</div>
         </div>
         <div>
-          <label className="muted">Senha</label>
+          <label className="label">Senha</label>
           <input className="input" type="password" {...form.register('senha')} />
           <div className="error">{form.formState.errors.senha?.message}</div>
         </div>

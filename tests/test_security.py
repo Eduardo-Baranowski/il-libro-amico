@@ -1,0 +1,21 @@
+def test_admin_route_requires_auth(client):
+    resp = client.get("/admin/users")
+    assert resp.status_code == 401
+
+
+def test_admin_route_forbids_non_admin(client, reader_token, auth_header):
+    resp = client.get("/admin/users", headers=auth_header(reader_token))
+    assert resp.status_code == 403
+    assert resp.get_json()["message"] == "Acesso Negado"
+
+
+def test_editor_route_forbids_reader(client, reader_token, auth_header):
+    resp = client.get("/editor/books", headers=auth_header(reader_token))
+    assert resp.status_code == 403
+    assert resp.get_json()["message"] == "Acesso Negado"
+
+
+def test_reader_route_forbids_editor(client, editor_token, auth_header):
+    resp = client.get("/reader/requests", headers=auth_header(editor_token))
+    assert resp.status_code == 403
+    assert resp.get_json()["message"] == "Acesso Negado"

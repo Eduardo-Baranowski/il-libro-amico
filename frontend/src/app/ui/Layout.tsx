@@ -6,10 +6,11 @@ export function Layout() {
   const { auth, logout } = useAuth()
 
   return (
-    <div>
+    <div className="app-shell">
       <header className="topbar">
         <div className="topbar-inner">
           <div className="nav">
+            <span className="brand">Lumina Library</span>
             <Link className="pill" to="/">
               Livros
             </Link>
@@ -62,7 +63,7 @@ export function Layout() {
           </div>
 
           <div className="nav">
-            {auth.role ? <span className="pill">Perfil: {auth.role}</span> : null}
+            {auth.role ? <span className="pill primary">Perfil: {auth.role}</span> : null}
             {auth.token ? (
               <button className="btn secondary" onClick={logout} type="button">
                 Sair

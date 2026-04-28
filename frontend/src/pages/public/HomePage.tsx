@@ -35,7 +35,7 @@ export function HomePage() {
             <div key={it.id} className="card" style={{ borderRadius: 10, padding: 12 }}>
               <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
                 <div className="row" style={{ alignItems: 'center' }}>
-                  <span className="pill">{it.leitor.nome}</span>
+                  <span className="pill primary">{it.leitor.nome}</span>
                   <span className="pill">{it.status}</span>
                   {it.nota ? <span className="pill">nota {it.nota}/5</span> : null}
                 </div>
@@ -69,12 +69,12 @@ export function HomePage() {
         </div>
       </div>
 
-      <div className="card" style={{ flex: 1, minWidth: 260 }}>
+      <div className="card card-accent" style={{ flex: 1, minWidth: 260 }}>
         <h2 style={{ margin: 0 }}>Dicas</h2>
-        <p className="muted" style={{ marginTop: 8 }}>
+        <p style={{ marginTop: 8, opacity: 0.9 }}>
           Cadastre leituras como leitor em “Nova solicitação” e (em breve) “Minhas leituras”.
         </p>
-        <p className="muted" style={{ marginTop: 8 }}>
+        <p style={{ marginTop: 8, opacity: 0.9 }}>
           Swagger: <code>/apidocs/</code>. Em dev: proxy <code>/api</code>.
         </p>
       </div>

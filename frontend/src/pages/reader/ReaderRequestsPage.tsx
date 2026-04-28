@@ -19,7 +19,7 @@ export function ReaderRequestsPage() {
 
       {q.data ? (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table>
             <thead>
               <tr>
                 <th align="left">ID</th>
@@ -36,7 +36,7 @@ export function ReaderRequestsPage() {
                   <td style={{ padding: '6px 0' }}>{r.id}</td>
                   <td>{r.editor_id}</td>
                   <td>
-                    <span className="pill">{r.status}</span>
+                    <span className="pill primary">{r.status}</span>
                   </td>
                   <td>{new Date(r.data_criacao).toLocaleString()}</td>
                   <td className="muted">{r.conteudo}</td>

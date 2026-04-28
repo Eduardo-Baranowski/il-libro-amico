@@ -38,7 +38,7 @@ export function EditorRequestsPage() {
           <div key={r.id} className="card" style={{ borderRadius: 10 }}>
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <strong>#{r.id}</strong> <span className="pill">{r.status}</span>
+                <strong>#{r.id}</strong> <span className="pill primary">{r.status}</span>
                 <div className="muted">Leitor: {r.leitor_id}</div>
               </div>
               <div className="muted">{r.data_criacao ? new Date(r.data_criacao).toLocaleString() : ''}</div>

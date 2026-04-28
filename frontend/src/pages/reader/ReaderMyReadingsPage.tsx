@@ -46,7 +46,7 @@ export function ReaderMyReadingsPage() {
                     <div className="muted">Editora: {r.livro.editora}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <span className="pill">{statusLabel(r.status)}</span>
+                    <span className="pill primary">{statusLabel(r.status)}</span>
                     {r.nota ? <div className="muted" style={{ marginTop: 6 }}>nota {r.nota}/5</div> : null}
                   </div>
                 </div>
