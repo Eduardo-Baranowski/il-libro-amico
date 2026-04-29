@@ -1,3 +1,10 @@
+export interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  page: number
+  pages: number
+}
+
 import type { Role } from './token'
 
 export type LoginResponse = { 

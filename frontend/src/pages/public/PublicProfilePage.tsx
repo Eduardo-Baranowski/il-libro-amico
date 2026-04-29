@@ -4,10 +4,11 @@ import { useState } from 'react'
 import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
-import type { RelationStatus, VisitProfile, Order } from '../../lib/types'
+import type { RelationStatus, VisitProfile, Order, PaginatedResponse } from '../../lib/types'
 import { useAuth } from '../../app/AuthProvider'
 import { getUserIdFromToken } from '../../lib/token'
 import { ConfirmModal } from '../../app/components/ConfirmModal'
+import { Pagination } from '../../app/components/Pagination'
 
 export function PublicProfilePage() {
   const qc = useQueryClient()
@@ -16,6 +17,7 @@ export function PublicProfilePage() {
   const { userId } = useParams()
   const [readingToDelete, setReadingToDelete] = useState<number | null>(null)
   const [expandedOrders, setExpandedOrders] = useState<Record<number, boolean>>({})
+  const [orderPage, setOrderPage] = useState(1)
 
   const meId = getUserIdFromToken()
   const viewedId = userId ? Number(userId) : null
@@ -34,9 +36,9 @@ export function PublicProfilePage() {
   })
 
   const ordersQ = useQuery({
-    queryKey: ['myOrders'],
+    queryKey: ['myOrders', orderPage],
     enabled: isOwnProfile,
-    queryFn: () => api<Order[]>('/reader/orders'),
+    queryFn: () => api<PaginatedResponse<Order>>(`/reader/orders?page=${orderPage}&per_page=8`),
   })
 
   const followM = useMutation({
@@ -198,16 +200,16 @@ export function PublicProfilePage() {
               </div>
             </div>
 
-            {/* Histórico de Pedidos (Privado & Expansível) */}
+            {/* Histórico de Pedidos (Privado & Paginação) */}
             {isOwnProfile && (
               <div>
                 <div className="visit-section-title">
                   <h3>🛍️ Meu Histórico de Pedidos</h3>
                 </div>
                 <div className="stack" style={{ gap: '12px' }}>
-                  {ordersQ.isLoading && <p className="muted">Carregando pedidos...</p>}
-                  {ordersQ.data?.length ? (
-                    ordersQ.data.map(order => {
+                  {ordersQ.isLoading && <p className="muted" style={{ textAlign: 'center' }}>Carregando pedidos...</p>}
+                  {ordersQ.data?.items.length ? (
+                    ordersQ.data.items.map(order => {
                       const isExpanded = expandedOrders[order.id]
                       return (
                         <div key={order.id} className="card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface)' }}>
@@ -299,6 +301,13 @@ export function PublicProfilePage() {
                       <Link to="/livros" className="btn secondary" style={{ marginTop: '12px', display: 'inline-flex' }}>Explorar Catálogo</Link>
                     </div>
                   )}
+                  
+                  <Pagination 
+                    currentPage={orderPage} 
+                    totalPages={ordersQ.data?.pages ?? 1} 
+                    onPageChange={setOrderPage} 
+                    isLoading={ordersQ.isFetching}
+                  />
                 </div>
               </div>
             )}

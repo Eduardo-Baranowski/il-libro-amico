@@ -471,37 +471,38 @@ def list_editor_books(editor_id):
 
 @reader_bp.route('/books', methods=['GET'])
 def list_all_books():
-    """
-    Listar todos os livros (Público)
-    ---
-    tags:
-      - Público
-    responses:
-      200:
-        description: Lista de todos os livros
-    """
-    books = Livro.query.all()
-    return jsonify([
-        {
-            "id": b.id,
-            "titulo": b.titulo,
-            "autor": b.autor,
-            "preco": str(b.preco),
-            "estoque": b.estoque,
-            "editor_id": b.editor_id,
-            "status_estoque": (
-                "esgotado"
-                if b.estoque <= 0
-                else "baixo"
-                if b.estoque <= 3
-                else "disponivel"
-            ),
-            "descricao": b.descricao,
-            "imagem": b.imagem,
-            "imagem_url": image_url(b.imagem),
-            "editora": b.editor.nome
-        } for b in books
-    ]), 200
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 12, type=int)
+    
+    pagination = Livro.query.paginate(page=page, per_page=per_page, error_out=False)
+    books = pagination.items
+    
+    return jsonify({
+        "items": [
+            {
+                "id": b.id,
+                "titulo": b.titulo,
+                "autor": b.autor,
+                "preco": str(b.preco),
+                "estoque": b.estoque,
+                "editor_id": b.editor_id,
+                "status_estoque": (
+                    "esgotado"
+                    if b.estoque <= 0
+                    else "baixo"
+                    if b.estoque <= 3
+                    else "disponivel"
+                ),
+                "descricao": b.descricao,
+                "imagem": b.imagem,
+                "imagem_url": image_url(b.imagem),
+                "editora": b.editor.nome
+            } for b in books
+        ],
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages
+    }), 200
 
 
 @reader_bp.route('/search', methods=['GET'])
@@ -738,25 +739,19 @@ def create_reading():
 @jwt_required()
 @verificar_leitor
 def list_my_readings():
-    """
-    Listar minhas leituras (Apenas Leitor)
-    ---
-    tags:
-      - Leitor
-    security:
-      - Bearer: []
-    responses:
-      200:
-        description: Lista de leituras
-    """
     leitor_id = int(get_jwt_identity())
-    rows = (
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    
+    pagination = (
         Leitura.query.filter_by(leitor_id=leitor_id)
         .order_by(Leitura.atualizado_em.desc(), Leitura.criado_em.desc())
-        .all()
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
-    return jsonify(
-        [
+    rows = pagination.items
+    
+    return jsonify({
+        "items": [
             {
                 "id": r.id,
                 "livro": {
@@ -774,8 +769,11 @@ def list_my_readings():
                 "atualizado_em": r.atualizado_em.isoformat() if r.atualizado_em else None,
             }
             for r in rows
-        ]
-    ), 200
+        ],
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages
+    }), 200
 
 
 @reader_bp.route("/readings/<int:reading_id>", methods=["DELETE"])
@@ -840,24 +838,14 @@ def get_recommendations():
 
 @reader_bp.route("/feed", methods=["GET"])
 def feed():
-    """
-    Feed público de leituras (Público)
-    ---
-    tags:
-      - Público
-    responses:
-      200:
-        description: Feed de leituras
-    """
-    limit = request.args.get("limit", "30")
-    try:
-        limit = max(1, min(100, int(limit)))
-    except ValueError:
-        limit = 30
-
-    rows = Leitura.query.order_by(Leitura.criado_em.desc()).limit(limit).all()
-    return jsonify(
-        [
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    
+    pagination = Leitura.query.order_by(Leitura.criado_em.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    rows = pagination.items
+    
+    return jsonify({
+        "items": [
             {
                 "id": r.id,
                 "leitor": {
@@ -877,8 +865,11 @@ def feed():
                 "criado_em": r.criado_em.isoformat() if r.criado_em else None,
             }
             for r in rows
-        ]
-    ), 200
+        ],
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages
+    }), 200
 
 @reader_bp.route('/requests', methods=['POST'])
 @jwt_required()
@@ -1023,21 +1014,12 @@ def list_my_purchases():
 @jwt_required()
 @verificar_leitor
 def get_my_requests():
-    """
-    Listar minhas solicitações (Apenas Leitor)
-    ---
-    tags:
-      - Leitor
-    security:
-      - Bearer: []
-    responses:
-      200:
-        description: Lista de solicitações
-      403:
-        description: Acesso negado
-    """
     leitor_id = int(get_jwt_identity())
-    minhas_solicitacoes = Request.query.filter_by(leitor_id=leitor_id).all()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    
+    pagination = Request.query.filter_by(leitor_id=leitor_id).order_by(Request.data_criacao.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    minhas_solicitacoes = pagination.items
     
     resultado = []
     for s in minhas_solicitacoes:
@@ -1055,7 +1037,12 @@ def get_my_requests():
             "data_criacao": s.data_criacao.isoformat()
         })
     
-    return jsonify(resultado), 200
+    return jsonify({
+        "items": resultado,
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages
+    }), 200
 
 @reader_bp.route('/conversations', methods=['GET'])
 @jwt_required()
@@ -1168,7 +1155,11 @@ def create_order():
 @jwt_required()
 def list_orders():
     current_id = int(get_jwt_identity())
-    pedidos = Pedido.query.filter_by(leitor_id=current_id).order_by(Pedido.data_pedido.desc()).all()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 8, type=int)
+    
+    pagination = Pedido.query.filter_by(leitor_id=current_id).order_by(Pedido.data_pedido.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    pedidos = pagination.items
     
     resultado = []
     for p in pedidos:
@@ -1185,7 +1176,12 @@ def list_orders():
             } for item in p.itens]
         })
         
-    return jsonify(resultado), 200
+    return jsonify({
+        "items": resultado,
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages
+    }), 200
 
 # --- PROFILE MANAGEMENT ---
 

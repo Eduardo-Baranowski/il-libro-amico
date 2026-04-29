@@ -4,18 +4,20 @@ import { Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
-import type { BookPublic, Purchase, SearchResponse } from '../../lib/types'
+import type { BookPublic, Order, SearchResponse, PaginatedResponse } from '../../lib/types'
 import { useAuth } from '../../app/AuthProvider'
+import { Pagination } from '../../app/components/Pagination'
 
 export function StorePage() {
   const qc = useQueryClient()
   const { auth } = useAuth()
   const [term, setTerm] = useState('')
   const [scope, setScope] = useState<'all' | 'books' | 'users' | 'editors'>('all')
+  const [page, setPage] = useState(1)
   
   const booksQ = useQuery({
-    queryKey: ['storeBooks'],
-    queryFn: () => api<BookPublic[]>('/reader/books'),
+    queryKey: ['storeBooks', page],
+    queryFn: () => api<PaginatedResponse<BookPublic>>(`/reader/books?page=${page}&per_page=12`),
   })
   
   const searchQ = useQuery({
@@ -24,9 +26,9 @@ export function StorePage() {
     queryFn: () => api<SearchResponse>(`/reader/search?q=${encodeURIComponent(term.trim())}&limit=8`),
   })
   
-  const purchasesQ = useQuery({
-    queryKey: ['myPurchases'],
-    queryFn: () => api<Purchase[]>('/reader/purchases'),
+  const ordersQ = useQuery({
+    queryKey: ['myOrders', 1], // Mostramos os primeiros pedidos aqui como resumo
+    queryFn: () => api<PaginatedResponse<Order>>('/reader/orders?page=1&per_page=3'),
     enabled: auth.role === 'leitor',
   })
 
@@ -40,21 +42,21 @@ export function StorePage() {
       toast.success('Compra realizada com sucesso!')
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['storeBooks'] }),
-        qc.invalidateQueries({ queryKey: ['myPurchases'] }),
+        qc.invalidateQueries({ queryKey: ['myOrders'] }),
       ])
     },
     onError: (err: any) => toast.error(err.message || 'Erro ao processar compra.')
   })
 
-  const books = booksQ.data ?? []
+  const books = booksQ.data?.items ?? []
   const stats = useMemo(
     () => ({
-      total: books.length,
-      disponiveis: books.filter((b) => b.estoque > 0).length,
+      total: booksQ.data?.total ?? 0,
+      disponiveis: books.filter((b) => b.estoque > 0).length, // Nota: Isso só conta a página atual. Em um app real, o backend traria os stats consolidados.
       baixo: books.filter((b) => b.status_estoque === 'baixo').length,
       esgotados: books.filter((b) => b.status_estoque === 'esgotado').length,
     }),
-    [books],
+    [books, booksQ.data]
   )
 
   return (
@@ -68,13 +70,13 @@ export function StorePage() {
         <div className="store-metric-card is-primary">
           <div className="store-metric-label">Total de Títulos</div>
           <div className="store-metric-value">{stats.total}</div>
-          <div className="store-metric-sub">{stats.disponiveis} em estoque</div>
+          <div className="store-metric-sub">Página {page} de {booksQ.data?.pages ?? 1}</div>
         </div>
         <div className="store-metric-card">
           <div className="store-metric-label">Status do Catálogo</div>
-          <div className="store-metric-value">{stats.esgotados === 0 ? '100%' : '92%'}</div>
+          <div className="store-metric-value">{stats.total > 0 ? 'Ativo' : 'Vazio'}</div>
           <div className="store-metric-sub">
-            {stats.baixo} estoque baixo / {stats.esgotados} esgotados
+            Explorando o conhecimento
           </div>
         </div>
       </div>
@@ -172,7 +174,7 @@ export function StorePage() {
         )}
       </div>
 
-      {booksQ.isLoading ? <p>Carregando catálogo...</p> : null}
+      {booksQ.isLoading ? <p className="muted" style={{ textAlign: 'center', padding: '40px' }}>Carregando catálogo...</p> : null}
       
       <div className="stack">
         {books.map((book) => (
@@ -209,19 +211,47 @@ export function StorePage() {
         ))}
       </div>
 
+      <Pagination 
+        currentPage={page} 
+        totalPages={booksQ.data?.pages ?? 1} 
+        onPageChange={setPage} 
+        isLoading={booksQ.isFetching}
+      />
+
       {auth.role === 'leitor' && (
-        <div style={{ marginTop: 40, borderTop: '1px solid var(--border)', paddingTop: '32px' }}>
-          <h3 style={{ marginBottom: 16 }}>Minhas compras recentes</h3>
-          {purchasesQ.data?.length ? (
-            <div className="stack">
-              {purchasesQ.data.slice(0, 3).map((p) => (
-                <div key={p.id} className="muted" style={{ fontSize: 14, background: 'var(--surface-2)', padding: '12px 16px', borderRadius: '12px', marginBottom: 8 }}>
-                  Pedido #{p.id} — {p.livro.titulo} — {p.quantidade} un — <strong>R$ {p.total}</strong>
+        <div style={{ marginTop: 60, borderTop: '1px solid var(--border)', paddingTop: '48px' }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <h3 style={{ margin: 0 }}>Pedidos Recentes</h3>
+            <Link to={`/perfil/${auth.id}`} className="link-hover" style={{ fontSize: '14px', fontWeight: 700 }}>Ver Histórico Completo →</Link>
+          </div>
+          
+          {ordersQ.data?.items.length ? (
+            <div className="stack" style={{ gap: '12px' }}>
+              {ordersQ.data.items.map((p) => (
+                <div key={p.id} className="row" style={{ 
+                  padding: '16px', 
+                  background: 'var(--surface-2)', 
+                  borderRadius: '14px', 
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  border: '1px solid var(--border)'
+                }}>
+                  <div className="row" style={{ gap: '16px', alignItems: 'center' }}>
+                    <div style={{ width: '40px', height: '40px', background: 'var(--primary-soft)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📦</div>
+                    <div>
+                      <strong style={{ display: 'block', fontSize: '14px' }}>Pedido #{p.id}</strong>
+                      <span className="muted small">{p.itens.length} {p.itens.length === 1 ? 'item' : 'itens'} • {new Date(p.data).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 800, color: 'var(--primary)' }}>R$ {p.total}</div>
+                    <span className="pill success mini-pill" style={{ fontSize: '9px' }}>{p.status}</span>
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="muted">Nenhuma compra realizada ainda.</p>
+            <p className="muted">Nenhum pedido realizado ainda.</p>
           )}
         </div>
       )}

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { api } from '../../lib/api'
-import type { BookPublic } from '../../lib/types'
+import type { BookPublic, PaginatedResponse } from '../../lib/types'
 import { StarRating } from '../../app/components/StarRating'
 
 type Status = 'quero_ler' | 'lendo' | 'lido'
@@ -33,12 +33,12 @@ export function ReaderNewReadingPage() {
   }, [detailQ.data])
 
   const booksQ = useQuery({
-    queryKey: ['booksAll'],
-    queryFn: () => api<BookPublic[]>('/reader/books'),
+    queryKey: ['booksAll', 1], // Buscamos a primeira página para o select
+    queryFn: () => api<PaginatedResponse<BookPublic>>('/reader/books?page=1&per_page=100'),
     enabled: !editBookId,
   })
 
-  const options = useMemo(() => booksQ.data ?? [], [booksQ.data])
+  const options = useMemo(() => booksQ.data?.items ?? [], [booksQ.data])
 
   const saveM = useMutation({
     mutationFn: () =>
@@ -63,19 +63,19 @@ export function ReaderNewReadingPage() {
 
   return (
     <div className="card-container">
-      <div className="card">
-        <h1 style={{ marginTop: 0, marginBottom: 8 }}>{editBookId ? '✏️ Editar experiência' : '📖 Registrar leitura'}</h1>
-        <p className="muted" style={{ marginBottom: 32 }}>
+      <div className="card" style={{ padding: '32px' }}>
+        <h1 style={{ marginTop: 0, marginBottom: 8, letterSpacing: '-1px' }}>{editBookId ? '✏️ Editar Experiência' : '📖 Registrar Leitura'}</h1>
+        <p className="muted" style={{ marginBottom: 40 }}>
           {editBookId 
             ? 'Atualize seu progresso e avaliação deste livro.' 
             : 'Escolha um livro do catálogo e marque como sua próxima leitura ou uma obra concluída.'}
         </p>
 
-        {detailQ.isLoading && <p>Carregando dados da leitura...</p>}
+        {detailQ.isLoading && <p className="muted">Sincronizando dados...</p>}
 
-        <div className="stack" style={{ gap: '24px' }}>
+        <div className="stack" style={{ gap: '32px' }}>
           {!editBookId ? (
-            <div>
+            <div style={{ maxWidth: '600px' }}>
               <label className="label">Qual livro você está lendo?</label>
               <select className="input" value={bookId} onChange={(e) => setBookId(e.target.value ? Number(e.target.value) : '')}>
                 <option value="">— selecionar livro —</option>
@@ -85,17 +85,17 @@ export function ReaderNewReadingPage() {
                   </option>
                 ))}
               </select>
-              {booksQ.isLoading && <small className="muted">Carregando catálogo...</small>}
+              {booksQ.isLoading && <small className="muted">Carregando catálogo completo...</small>}
             </div>
           ) : (
-            <div className="search-card" style={{ padding: '20px', background: 'var(--surface-2)', borderRadius: '16px' }}>
-              <div style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--primary)' }}>{detailQ.data?.titulo}</div>
-              <div className="muted">{detailQ.data?.autor}</div>
+            <div className="search-card" style={{ padding: '24px', background: 'var(--surface-2)', borderRadius: '16px', maxWidth: '600px', border: 'none' }}>
+              <div style={{ fontWeight: 800, fontSize: '1.4rem', color: 'var(--primary)', letterSpacing: '-0.5px' }}>{detailQ.data?.titulo}</div>
+              <div className="muted" style={{ fontWeight: 600 }}>{detailQ.data?.autor}</div>
             </div>
           )}
 
-          <div className="row" style={{ gap: '24px', flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 200px' }}>
+          <div className="row" style={{ gap: '32px', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 280px', maxWidth: '400px' }}>
               <label className="label">Status atual</label>
               <select className="input" value={status} onChange={(e) => setStatus(e.target.value as Status)}>
                 <option value="quero_ler">Quero ler</option>
@@ -104,35 +104,36 @@ export function ReaderNewReadingPage() {
               </select>
             </div>
 
-            <div style={{ flex: '1 1 200px' }}>
-              <label className="label">Sua nota</label>
-              <div style={{ height: '48px', display: 'flex', alignItems: 'center', background: 'var(--surface-2)', padding: '0 16px', borderRadius: '12px' }}>
+            <div style={{ flex: '1 1 280px', maxWidth: '400px' }}>
+              <label className="label">Sua avaliação</label>
+              <div style={{ height: '52px', display: 'flex', alignItems: 'center', background: 'var(--surface-2)', padding: '0 20px', borderRadius: '14px' }}>
                 <StarRating 
                   rating={Number(nota) || 0} 
                   onChange={(val) => setNota(val)} 
                   editable 
                   size={24} 
                 />
-                {nota ? <span style={{ marginLeft: 12, fontWeight: 700 }}>{nota}/5</span> : null}
+                {nota ? <span style={{ marginLeft: 16, fontWeight: 800, color: 'var(--primary)' }}>{nota}/5</span> : null}
               </div>
             </div>
           </div>
 
-          <div>
+          <div style={{ maxWidth: '800px' }}>
             <label className="label">Algum comentário ou reflexão?</label>
             <textarea 
               className="input" 
-              rows={5} 
-              placeholder="O que você está achando da obra?"
+              rows={6} 
+              placeholder="O que esta obra está despertando em você?"
               value={comentario} 
               onChange={(e) => setComentario(e.target.value)} 
+              style={{ padding: '16px', borderRadius: '14px' }}
             />
           </div>
 
-          <div className="row" style={{ marginTop: '12px', gap: '12px', flexWrap: 'wrap' }}>
+          <div className="row" style={{ marginTop: '20px', gap: '16px', flexWrap: 'wrap' }}>
             <button 
               className="btn secondary" 
-              style={{ flex: 1, minWidth: '140px' }} 
+              style={{ flex: 1, minWidth: '160px', borderRadius: '14px' }} 
               type="button"
               onClick={() => navigate('/leitor/leituras')}
             >
@@ -140,12 +141,12 @@ export function ReaderNewReadingPage() {
             </button>
             <button 
               className="btn" 
-              style={{ flex: 2, minWidth: '200px' }} 
+              style={{ flex: 2, minWidth: '220px', borderRadius: '14px' }} 
               type="button" 
               onClick={() => saveM.mutate()} 
               disabled={saveM.isPending || (bookId === '')}
             >
-              {saveM.isPending ? 'Salvando…' : editBookId ? 'Salvar Alterações' : 'Confirmar Registro'}
+              {saveM.isPending ? 'Salvando…' : editBookId ? 'Atualizar Experiência' : 'Confirmar Registro'}
             </button>
           </div>
         </div>

@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { api } from '../../lib/api'
-import type { MyReading } from '../../lib/types'
+import type { MyReading, PaginatedResponse } from '../../lib/types'
 import { StarRating } from '../../app/components/StarRating'
 import { ConfirmModal } from '../../app/components/ConfirmModal'
 import { ExploreBooks } from '../../app/components/ExploreBooks'
+import { Pagination } from '../../app/components/Pagination'
 
 function statusLabel(st: MyReading['status']) {
   if (st === 'quero_ler') return 'Quero ler'
@@ -17,10 +18,11 @@ function statusLabel(st: MyReading['status']) {
 export function ReaderMyReadingsPage() {
   const qc = useQueryClient()
   const [readingToDelete, setReadingToDelete] = useState<number | null>(null)
+  const [page, setPage] = useState(1)
   
   const q = useQuery({
-    queryKey: ['myReadings'],
-    queryFn: () => api<MyReading[]>('/reader/readings'),
+    queryKey: ['myReadings', page],
+    queryFn: () => api<PaginatedResponse<MyReading>>(`/reader/readings?page=${page}&per_page=10`),
   })
 
   const deleteM = useMutation({
@@ -43,13 +45,13 @@ export function ReaderMyReadingsPage() {
         <p className="muted" style={{ marginBottom: 24 }}>Gerencie seus livros e experiências literárias.</p>
       </div>
 
-      {q.isLoading ? <p>Carregando…</p> : null}
+      {q.isLoading ? <p className="muted" style={{ textAlign: 'center', padding: '40px' }}>Carregando…</p> : null}
       {q.isError ? <p className="error">{(q.error as any)?.message}</p> : null}
 
-      {q.data && q.data.length === 0 ? <p className="muted" style={{ padding: '40px 20px', textAlign: 'center' }}>Você ainda não registrou leituras.</p> : null}
+      {q.data && q.data.items.length === 0 ? <p className="muted" style={{ padding: '60px 20px', textAlign: 'center' }}>Você ainda não registrou leituras.</p> : null}
 
       <div className="readings-list">
-        {q.data?.map((r) => (
+        {q.data?.items.map((r) => (
           <div key={r.id} className="reading-card card">
             <div className="reading-card-body">
               <div className="reading-card-media">
@@ -104,6 +106,13 @@ export function ReaderMyReadingsPage() {
           </div>
         ))}
       </div>
+
+      <Pagination 
+        currentPage={page} 
+        totalPages={q.data?.pages ?? 1} 
+        onPageChange={setPage} 
+        isLoading={q.isFetching}
+      />
 
       <ConfirmModal 
         isOpen={readingToDelete !== null}

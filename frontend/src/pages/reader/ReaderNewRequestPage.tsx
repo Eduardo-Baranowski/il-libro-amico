@@ -46,19 +46,19 @@ export function ReaderNewRequestPage() {
 
   return (
     <div className="card-container">
-      <div className="card">
-        <h1 style={{ marginTop: 0, marginBottom: 8 }}>Nova solicitação</h1>
-        <p className="muted" style={{ marginBottom: 32 }}>
+      <div className="card" style={{ padding: '32px' }}>
+        <h1 style={{ marginTop: 0, marginBottom: 8, letterSpacing: '-1px' }}>📬 Nova Solicitação</h1>
+        <p className="muted" style={{ marginBottom: 40 }}>
           Envie uma mensagem para a editora demonstrando seu interesse em um livro específico ou solicitando informações.
         </p>
 
-        {editorsQ.isLoading ? <p>Carregando editoras…</p> : null}
+        {editorsQ.isLoading ? <p className="muted">Carregando editoras…</p> : null}
         {editorsQ.isError ? <p className="error">{(editorsQ.error as any)?.message}</p> : null}
 
-        <div className="stack" style={{ gap: '24px' }}>
-          <div className="row" style={{ gap: '24px', flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 250px' }}>
-              <label className="label">Editora</label>
+        <div className="stack" style={{ gap: '32px' }}>
+          <div className="row" style={{ gap: '32px', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 280px', maxWidth: '450px' }}>
+              <label className="label">Editora de interesse</label>
               <select
                 className="input"
                 value={editorId}
@@ -66,6 +66,7 @@ export function ReaderNewRequestPage() {
                   setEditorId(e.target.value ? Number(e.target.value) : '')
                   setBookId('')
                 }}
+                style={{ borderRadius: '14px' }}
               >
                 <option value="">— escolher editora —</option>
                 {editorsQ.data?.map((e) => (
@@ -76,19 +77,20 @@ export function ReaderNewRequestPage() {
               </select>
             </div>
 
-            <div style={{ flex: '1 1 250px' }}>
-              <label className="label">Livro</label>
+            <div style={{ flex: '1 1 280px', maxWidth: '450px' }}>
+              <label className="label">Obra pretendida</label>
               <select
                 className="input"
                 value={bookId}
                 onChange={(e) => setBookId(e.target.value ? Number(e.target.value) : '')}
                 disabled={typeof editorId !== 'number' || booksQ.isLoading}
+                style={{ borderRadius: '14px' }}
               >
                 <option value="">
                   {typeof editorId !== 'number'
                     ? '— selecione a editora primeiro —'
                     : booksQ.isLoading
-                      ? 'Carregando livros...'
+                      ? 'Carregando acervo...'
                       : '— escolher livro —'}
                 </option>
                 {booksQ.data?.map((b) => (
@@ -98,32 +100,33 @@ export function ReaderNewRequestPage() {
                 ))}
               </select>
               {typeof editorId === 'number' && booksQ.data?.length === 0 ? (
-                <p className="muted small" style={{ marginTop: 6 }}>
-                  Esta editora ainda não possui livros cadastrados.
+                <p className="muted small" style={{ marginTop: 8, fontWeight: 600 }}>
+                  Esta editora ainda não possui livros listados.
                 </p>
               ) : null}
             </div>
           </div>
 
-          <div>
-            <label className="label">Mensagem para a editora</label>
+          <div style={{ maxWidth: '800px' }}>
+            <label className="label">Sua mensagem para a editora</label>
             <textarea
               className="input"
               rows={6}
               value={conteudo}
               onChange={(e) => setConteudo(e.target.value)}
-              placeholder="Descreva seu interesse nesse livro ou tire suas dúvidas..."
+              placeholder="Descreva seu interesse nesse livro ou tire suas dúvidas de forma clara e objetiva..."
+              style={{ padding: '16px', borderRadius: '14px' }}
             />
           </div>
 
-          {err ? <div className="error" style={{ padding: '12px', borderRadius: '8px' }}>{err}</div> : null}
-          {ok ? <div className="success" style={{ padding: '12px', borderRadius: '8px' }}>{ok}</div> : null}
+          {err ? <div className="error" style={{ padding: '16px', borderRadius: '12px', border: '1px solid rgba(186, 26, 26, 0.2)' }}>{err}</div> : null}
+          {ok ? <div className="success" style={{ padding: '16px', borderRadius: '12px', border: '1px solid rgba(22, 101, 52, 0.2)' }}>{ok}</div> : null}
 
-          <div className="row" style={{ gap: '12px' }}>
+          <div className="row" style={{ gap: '16px', flexWrap: 'wrap' }}>
             <button
               className="btn secondary"
               type="button"
-              style={{ flex: 1 }}
+              style={{ flex: 1, minWidth: '160px', borderRadius: '14px' }}
               onClick={() => navigate('/leitor/solicitacoes')}
             >
               Voltar
@@ -131,7 +134,7 @@ export function ReaderNewRequestPage() {
             <button
               className="btn"
               type="button"
-              style={{ flex: 2 }}
+              style={{ flex: 2, minWidth: '220px', borderRadius: '14px' }}
               onClick={() => sendM.mutate()}
               disabled={sendM.isPending || typeof editorId !== 'number' || typeof bookId !== 'number'}
             >
