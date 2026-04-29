@@ -1048,18 +1048,20 @@ def get_my_requests():
 @jwt_required()
 def list_conversations():
     current_id = int(get_jwt_identity())
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 15, type=int)
     
     # Busca todos os usuários com quem houve troca de mensagens
+    # Primeiro pegamos as conversas únicas (distintas combinações de sender/receiver)
     sent_to = db.session.query(Message.receiver_id).filter_by(sender_id=current_id).distinct()
     received_from = db.session.query(Message.sender_id).filter_by(receiver_id=current_id).distinct()
     
     user_ids = {uid[0] for uid in sent_to.all()} | {uid[0] for uid in received_from.all()}
     
-    conversations = []
+    conversations_raw = []
     for uid in user_ids:
         user = User.query.get(uid)
-        if not user:
-            continue
+        if not user: continue
             
         # Pega a última mensagem entre eles
         last_msg = Message.query.filter(
@@ -1069,7 +1071,7 @@ def list_conversations():
             )
         ).order_by(Message.data_envio.desc()).first()
         
-        conversations.append({
+        conversations_raw.append({
             "user_id": user.id,
             "user_nome": user.nome,
             "user_imagem_url": image_url(user.imagem),
@@ -1079,9 +1081,21 @@ def list_conversations():
         })
         
     # Ordena pelas mais recentes
-    conversations.sort(key=lambda x: x['last_message_time'] or "", reverse=True)
+    conversations_raw.sort(key=lambda x: x['last_message_time'] or "", reverse=True)
     
-    return jsonify(conversations), 200
+    # Paginação manual já que user_ids veio de sets e múltiplas queries
+    total = len(conversations_raw)
+    start = (page - 1) * per_page
+    end = start + per_page
+    items = conversations_raw[start:end]
+    pages = (total + per_page - 1) // per_page
+    
+    return jsonify({
+        "items": items,
+        "total": total,
+        "page": page,
+        "pages": pages
+    }), 200
 
 # --- ORDER MANAGEMENT ---
 
