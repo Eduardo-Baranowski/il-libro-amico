@@ -1,22 +1,21 @@
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
-import type { DirectMessage, RelationStatus, VisitProfile } from '../../lib/types'
+import type { RelationStatus, VisitProfile, Order } from '../../lib/types'
 import { useAuth } from '../../app/AuthProvider'
 import { getUserIdFromToken } from '../../lib/token'
 import { ConfirmModal } from '../../app/components/ConfirmModal'
 
 export function PublicProfilePage() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const { auth } = useAuth()
   const { userId } = useParams()
-  const [searchParams] = useSearchParams()
-  const [showChat, setShowChat] = useState(searchParams.get('chat') === '1')
-  const [draft, setDraft] = useState('')
   const [readingToDelete, setReadingToDelete] = useState<number | null>(null)
+  const [expandedOrders, setExpandedOrders] = useState<Record<number, boolean>>({})
 
   const meId = getUserIdFromToken()
   const viewedId = userId ? Number(userId) : null
@@ -27,17 +26,17 @@ export function PublicProfilePage() {
     enabled: Boolean(userId),
     queryFn: () => api<VisitProfile>(`/reader/users/${userId}/visit`),
   })
+  
   const relationQ = useQuery({
     queryKey: ['relationStatus', userId],
     enabled: Boolean(userId) && Boolean(auth.token),
     queryFn: () => api<RelationStatus>(`/reader/users/${userId}/relation`),
   })
-  const messagesQ = useQuery({
-    queryKey: ['directMessages', userId],
-    enabled: Boolean(userId) && Boolean(auth.token) && showChat,
-    queryFn: () => api<DirectMessage[]>(`/reader/users/${userId}/messages?limit=120`),
-    refetchInterval: showChat ? 2000 : false,
-    refetchOnWindowFocus: true,
+
+  const ordersQ = useQuery({
+    queryKey: ['myOrders'],
+    enabled: isOwnProfile,
+    queryFn: () => api<Order[]>('/reader/orders'),
   })
 
   const followM = useMutation({
@@ -52,6 +51,7 @@ export function PublicProfilePage() {
       ])
     },
   })
+  
   const connectM = useMutation({
     mutationFn: (isFriend: boolean) =>
       api<{ message: string }>(`/reader/users/${userId}/connect`, {
@@ -64,17 +64,6 @@ export function PublicProfilePage() {
       ])
     },
   })
-  const sendM = useMutation({
-    mutationFn: () =>
-      api<{ id: number; message: string }>(`/reader/users/${userId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ conteudo: draft }),
-      }),
-    onSuccess: async () => {
-      setDraft('')
-      await qc.invalidateQueries({ queryKey: ['directMessages', userId] })
-    },
-  })
 
   const deleteReadingM = useMutation({
     mutationFn: (id: number) => api(`/reader/readings/${id}`, { method: 'DELETE' }),
@@ -85,6 +74,13 @@ export function PublicProfilePage() {
     },
     onError: (err: any) => toast.error(err.message || 'Erro ao remover')
   })
+
+  const toggleOrder = (orderId: number) => {
+    setExpandedOrders(prev => ({
+      ...prev,
+      [orderId]: !prev[orderId]
+    }))
+  }
 
   if (visitQ.isLoading) return <div className="container" style={{ padding: '40px', textAlign: 'center' }}>Carregando perfil...</div>
   if (visitQ.isError) return <div className="container error" style={{ padding: '40px', textAlign: 'center' }}>Erro ao carregar perfil.</div>
@@ -147,8 +143,8 @@ export function PublicProfilePage() {
             <div className="row" style={{ paddingBottom: '12px' }}>
               {auth.token && !isOwnProfile ? (
                 <>
-                  <button className="btn" type="button" onClick={() => setShowChat((v) => !v)}>
-                    {showChat ? 'Fechar chat' : 'Enviar Mensagem'}
+                  <button className="btn" type="button" onClick={() => navigate(`/mensagens/${userId}`)}>
+                    Enviar Mensagem
                   </button>
                   <button
                     className="btn secondary"
@@ -168,7 +164,7 @@ export function PublicProfilePage() {
                   </button>
                 </>
               ) : auth.token && isOwnProfile ? (
-                <span className="pill primary">Este é o seu perfil</span>
+                <span className="pill primary" style={{ fontWeight: 800 }}>✓ Este é o seu perfil</span>
               ) : (
                 <Link className="btn" to="/entrar">
                   Entrar para interagir
@@ -181,61 +177,137 @@ export function PublicProfilePage() {
             <p>{profile.user.bio || 'Nenhuma biografia informada.'}</p>
           </div>
         </div>
-        
-        {showChat ? (
-          <div className="card">
-            <h3 style={{ marginTop: 0 }}>Conversa com {u.nome}</h3>
-            <div className="chat-thread">
-              {messagesQ.data?.length ? (
-                messagesQ.data.map((m) => (
-                  <div key={m.id} className={`chat-bubble ${m.sender_id === meId ? 'outgoing' : 'incoming'}`}>
-                    <div>{m.conteudo}</div>
-                    <small className="chat-time">{m.data_envio ? new Date(m.data_envio).toLocaleTimeString() : ''}</small>
-                  </div>
-                ))
-              ) : (
-                <p className="muted" style={{ textAlign: 'center', padding: '20px' }}>Sem mensagens ainda. Comece uma conversa!</p>
-              )}
-            </div>
-            <div className="row" style={{ marginTop: 10 }}>
-              <input
-                className="input"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="Escreva uma mensagem..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey && draft.trim() && !sendM.isPending) {
-                    e.preventDefault()
-                    sendM.mutate()
-                  }
-                }}
-              />
-              <button className="btn" type="button" onClick={() => sendM.mutate()} disabled={sendM.isPending || !draft.trim() || isOwnProfile}>
-                Enviar
-              </button>
-            </div>
-          </div>
-        ) : null}
 
         <div className="visit-grid">
-          <div>
-            <div className="visit-section-title">
-              <h3>Contribuições em Destaque</h3>
-            </div>
-            <div className="visit-cards">
-              {profile.featured.length ? profile.featured.map((item) => (
-                <Link key={item.id} className="search-card" to={`/livro/${item.id}`}>
-                  <div className="request-thumb sm">{item.imagem_url ? <img src={item.imagem_url} alt={item.titulo} /> : <span>Sem capa</span>}</div>
-                  <div>
-                    <strong>{item.titulo}</strong>
-                    <div className="muted">{item.autor}</div>
-                  </div>
-                </Link>
-              )) : <p className="muted">Nenhuma contribuição em destaque.</p>}
+          <div className="stack" style={{ gap: '32px' }}>
+            {/* Contribuições em Destaque */}
+            <div>
+              <div className="visit-section-title">
+                <h3>Contribuições em Destaque</h3>
+              </div>
+              <div className="visit-cards">
+                {profile.featured.length ? profile.featured.map((item) => (
+                  <Link key={item.id} className="search-card" to={`/livro/${item.id}`}>
+                    <div className="request-thumb sm">{item.imagem_url ? <img src={item.imagem_url} alt={item.titulo} /> : <span>Sem capa</span>}</div>
+                    <div>
+                      <strong>{item.titulo}</strong>
+                      <div className="muted">{item.autor}</div>
+                    </div>
+                  </Link>
+                )) : <p className="muted">Nenhuma contribuição em destaque.</p>}
+              </div>
             </div>
 
-            <div className="card" style={{ marginTop: 24, padding: '24px' }}>
-              <h3 style={{ marginTop: 0, marginBottom: '20px' }}>📖 Diário de Leitura</h3>
+            {/* Histórico de Pedidos (Privado & Expansível) */}
+            {isOwnProfile && (
+              <div>
+                <div className="visit-section-title">
+                  <h3>🛍️ Meu Histórico de Pedidos</h3>
+                </div>
+                <div className="stack" style={{ gap: '12px' }}>
+                  {ordersQ.isLoading && <p className="muted">Carregando pedidos...</p>}
+                  {ordersQ.data?.length ? (
+                    ordersQ.data.map(order => {
+                      const isExpanded = expandedOrders[order.id]
+                      return (
+                        <div key={order.id} className="card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface)' }}>
+                          {/* Cabeçalho do Pedido */}
+                          <div 
+                            onClick={() => toggleOrder(order.id)}
+                            style={{ 
+                              padding: '16px 24px', 
+                              cursor: 'pointer', 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center',
+                              background: isExpanded ? 'var(--surface-2)' : 'transparent',
+                              transition: 'background 0.2s ease'
+                            }}
+                          >
+                            <div className="row" style={{ gap: '20px', alignItems: 'center' }}>
+                              <div style={{ 
+                                width: '40px', 
+                                height: '40px', 
+                                borderRadius: '10px', 
+                                background: 'var(--primary-soft)', 
+                                color: 'var(--primary)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '18px'
+                              }}>
+                                📦
+                              </div>
+                              <div>
+                                <strong style={{ display: 'block', fontSize: '15px' }}>Pedido #{order.id}</strong>
+                                <span className="muted small">{new Date(order.data).toLocaleDateString()} • {order.itens.length} {order.itens.length === 1 ? 'item' : 'itens'}</span>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1.1rem' }}>R$ {order.total}</div>
+                                <span className="pill success mini-pill" style={{ fontSize: '9px', textTransform: 'uppercase' }}>{order.status}</span>
+                              </div>
+                              <span style={{ 
+                                fontSize: '12px', 
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.3s ease',
+                                opacity: 0.5
+                              }}>▼</span>
+                            </div>
+                          </div>
+
+                          {/* Lista de Itens (Expandida) */}
+                          {isExpanded && (
+                            <div style={{ 
+                              padding: '12px 24px 24px', 
+                              background: 'var(--surface-2)',
+                              borderTop: '1px solid var(--border)',
+                              animation: 'slideDown 0.3s ease-out'
+                            }}>
+                              <div className="stack" style={{ gap: '12px' }}>
+                                {order.itens.map((item, idx) => (
+                                  <div key={idx} className="row" style={{ 
+                                    padding: '12px', 
+                                    background: 'var(--surface)', 
+                                    borderRadius: '12px',
+                                    alignItems: 'center',
+                                    gap: '16px',
+                                    border: '1px solid var(--border)'
+                                  }}>
+                                    <div style={{ width: '40px', height: '56px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
+                                      {item.imagem_url ? <img src={item.imagem_url} alt={item.titulo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-2)' }}>📖</div>}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ fontSize: '14px', fontWeight: 700 }}>{item.titulo}</div>
+                                      <div className="muted small">{item.quantidade}x R$ {item.preco_unitario}</div>
+                                    </div>
+                                    <div style={{ fontWeight: 700, fontSize: '14px' }}>
+                                      R$ {(Number(item.preco_unitario) * item.quantidade).toFixed(2)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  ) : (
+                    !ordersQ.isLoading && <div className="card" style={{ padding: '32px', textAlign: 'center' }}>
+                      <p className="muted">Você ainda não realizou nenhum pedido.</p>
+                      <Link to="/livros" className="btn secondary" style={{ marginTop: '12px', display: 'inline-flex' }}>Explorar Catálogo</Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Diário de Leitura */}
+            <div>
+              <div className="visit-section-title">
+                <h3>📖 Diário de Leitura</h3>
+              </div>
               <div className="stack" style={{ gap: '16px' }}>
                 {profile.reading_log.length ? (
                   profile.reading_log.map((r) => (

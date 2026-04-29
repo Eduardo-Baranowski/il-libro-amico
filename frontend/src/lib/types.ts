@@ -82,6 +82,20 @@ export type Purchase = {
     editora: string
   }
 }
+export type OrderItem = {
+  titulo: string
+  quantidade: number
+  preco_unitario: string
+  imagem_url: string | null
+}
+
+export type Order = {
+  id: number
+  data: string
+  status: string
+  total: string
+  itens: OrderItem[]
+}
 
 export type SearchResponse = {
   books: BookPublic[]

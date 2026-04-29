@@ -137,7 +137,7 @@ export function Layout() {
                           <Link
                             key={`msg-${m.sender_id}`}
                             className="search-card"
-                            to={`/perfil/${m.sender_id}?chat=1`}
+                            to={`/mensagens/${m.sender_id}`}
                             onClick={() => setOpenNotifications(false)}
                           >
                             <div className="avatar-circle">
