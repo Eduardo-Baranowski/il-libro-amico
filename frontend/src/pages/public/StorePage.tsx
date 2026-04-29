@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
 import type { BookPublic, Purchase, SearchResponse } from '../../lib/types'
@@ -11,15 +12,18 @@ export function StorePage() {
   const { auth } = useAuth()
   const [term, setTerm] = useState('')
   const [scope, setScope] = useState<'all' | 'books' | 'users' | 'editors'>('all')
+  
   const booksQ = useQuery({
     queryKey: ['storeBooks'],
     queryFn: () => api<BookPublic[]>('/reader/books'),
   })
+  
   const searchQ = useQuery({
     queryKey: ['storeSearch', term],
     enabled: term.trim().length >= 2,
     queryFn: () => api<SearchResponse>(`/reader/search?q=${encodeURIComponent(term.trim())}&limit=8`),
   })
+  
   const purchasesQ = useQuery({
     queryKey: ['myPurchases'],
     queryFn: () => api<Purchase[]>('/reader/purchases'),
@@ -33,11 +37,13 @@ export function StorePage() {
         body: JSON.stringify({ livro_id: livroId, quantidade: 1 }),
       }),
     onSuccess: async () => {
+      toast.success('Compra realizada com sucesso!')
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['storeBooks'] }),
         qc.invalidateQueries({ queryKey: ['myPurchases'] }),
       ])
     },
+    onError: (err: any) => toast.error(err.message || 'Erro ao processar compra.')
   })
 
   const books = booksQ.data ?? []
@@ -54,21 +60,21 @@ export function StorePage() {
   return (
     <div className="card store-shell">
       <div className="requests-header">
-        <h1 style={{ margin: 0 }}>All Books</h1>
-        <span className="muted requests-header-link">Active catalog</span>
+        <h1 style={{ margin: 0 }}>Todos os Livros</h1>
+        <span className="muted requests-header-link">Catálogo Ativo</span>
       </div>
 
       <div className="store-metrics">
         <div className="store-metric-card is-primary">
-          <div className="store-metric-label">Total titles</div>
+          <div className="store-metric-label">Total de Títulos</div>
           <div className="store-metric-value">{stats.total}</div>
-          <div className="store-metric-sub">{stats.disponiveis} in stock</div>
+          <div className="store-metric-sub">{stats.disponiveis} em estoque</div>
         </div>
         <div className="store-metric-card">
-          <div className="store-metric-label">Live status</div>
+          <div className="store-metric-label">Status do Catálogo</div>
           <div className="store-metric-value">{stats.esgotados === 0 ? '100%' : '92%'}</div>
           <div className="store-metric-sub">
-            {stats.baixo} low stock / {stats.esgotados} out
+            {stats.baixo} estoque baixo / {stats.esgotados} esgotados
           </div>
         </div>
       </div>
@@ -96,7 +102,7 @@ export function StorePage() {
         </div>
       </div>
 
-      {booksQ.isLoading ? <p style={{ marginTop: 16 }}>Carregando…</p> : null}
+      {booksQ.isLoading ? <p style={{ marginTop: 16 }}>Carregando catálogo...</p> : null}
       {booksQ.isError ? (
         <p className="error" style={{ marginTop: 16 }}>
           {(booksQ.error as any)?.message ?? 'Erro ao carregar catálogo'}
@@ -115,7 +121,7 @@ export function StorePage() {
                 <div className="stack" style={{ marginTop: 8 }}>
                   {searchQ.data.books.map((b) => (
                     <Link key={`sb-${b.id}`} className="search-card" to={`/livro/${b.id}`}>
-                      <div className="request-thumb">{b.imagem_url ? <img src={b.imagem_url} alt={b.titulo} /> : <span>Sem capa</span>}</div>
+                      <div className="request-thumb sm">{b.imagem_url ? <img src={b.imagem_url} alt={b.titulo} /> : <span>Sem capa</span>}</div>
                       <div>
                         <strong>{b.titulo}</strong>
                         <div className="muted">
@@ -198,15 +204,15 @@ export function StorePage() {
                   }`}
                 >
                   {book.status_estoque === 'disponivel'
-                    ? `IN STOCK (${book.estoque})`
+                    ? `EM ESTOQUE (${book.estoque})`
                     : book.status_estoque === 'baixo'
-                      ? `LOW STOCK (${book.estoque})`
-                      : 'OUT OF STOCK'}
+                      ? `ESTOQUE BAIXO (${book.estoque})`
+                      : 'ESGOTADO'}
                 </span>
-                <span>R$ {book.preco}</span>
-                <Link to={`/editora/${book.editor_id}`}>Editora: {book.editora}</Link>
+                <span style={{ fontWeight: 700 }}>R$ {book.preco}</span>
+                <Link to={`/editora/${book.editor_id}`} className="muted" style={{ fontSize: '13px' }}>Editora: {book.editora}</Link>
               </div>
-              {book.descricao ? <div className="request-note">{book.descricao}</div> : null}
+              {book.descricao ? <div className="request-note" style={{ marginTop: '12px' }}>{book.descricao}</div> : null}
             </div>
 
             <div>
@@ -219,20 +225,19 @@ export function StorePage() {
                   Entrar para comprar
                 </button>
               )}
-              {buyM.isError ? <div className="error">Falha ao comprar.</div> : null}
             </div>
           </article>
         ))}
       </div>
 
       {auth.role === 'leitor' ? (
-        <div style={{ marginTop: 16 }}>
-          <h3 style={{ marginBottom: 8 }}>Minhas compras recentes</h3>
+        <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: '20px' }}>
+          <h3 style={{ marginBottom: 12 }}>Minhas compras recentes</h3>
           {purchasesQ.data?.length ? (
             <div className="stack">
               {purchasesQ.data.slice(0, 3).map((p) => (
-                <div key={p.id} className="muted" style={{ fontSize: 14 }}>
-                  #{p.id} - {p.livro.titulo} - {p.quantidade} un - R$ {p.total}
+                <div key={p.id} className="muted" style={{ fontSize: 14, background: 'var(--surface-2)', padding: '8px 12px', borderRadius: '8px' }}>
+                  Pedido #{p.id} — {p.livro.titulo} — {p.quantidade} un — <strong>R$ {p.total}</strong>
                 </div>
               ))}
             </div>

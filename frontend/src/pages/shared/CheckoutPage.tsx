@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
+import { toast } from 'react-hot-toast'
 import { useCart } from '../../app/CartProvider'
 import { api } from '../../lib/api'
 
@@ -31,13 +32,13 @@ export function CheckoutPage() {
       clearCart()
       setStep(3)
     },
-    onError: (err: any) => alert(err.message || 'Erro ao processar pedido.')
+    onError: (err: any) => toast.error(err.message || 'Erro ao processar pedido.')
   })
 
   const handleNext = () => {
     if (step === 1) {
       if (!address.rua || !address.numero || !address.cep) {
-        return alert('Por favor, preencha os campos obrigatórios de endereço.')
+        return toast.error('Por favor, preencha os campos obrigatórios de endereço.')
       }
       setStep(2)
     }

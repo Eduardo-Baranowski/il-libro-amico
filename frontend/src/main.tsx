@@ -6,6 +6,7 @@ import { RouterProvider } from 'react-router-dom'
 import './index.css'
 import { AuthProvider } from './app/AuthProvider'
 import { CartProvider } from './app/CartProvider'
+import { Toaster } from 'react-hot-toast'
 import { router } from './app/router'
 
 const queryClient = new QueryClient({
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <CartProvider>
+          <Toaster position="top-right" reverseOrder={false} />
           <RouterProvider router={router} />
         </CartProvider>
       </AuthProvider>

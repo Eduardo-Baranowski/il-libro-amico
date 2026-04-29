@@ -1,6 +1,7 @@
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
 import { useAuth } from '../../app/AuthProvider'
@@ -32,13 +33,13 @@ export function BookDetailsPage() {
       id: b.id,
       titulo: b.titulo,
       preco: Number(b.preco),
-      imagem_url: b.imagem_url,
+      imagem_url: b.imagem_url || null,
       quantidade: qtd
     })
     if (checkout) {
       navigate('/checkout')
     } else {
-      alert('Livro adicionado ao carrinho! 🛒')
+      toast.success('Livro adicionado ao carrinho! 🛒')
     }
   }
 
@@ -79,29 +80,29 @@ export function BookDetailsPage() {
             </div>
 
             {isLeitor && b.estoque > 0 && (
-              <div className="search-card" style={{ padding: '20px', background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '20px' }}>
-                  <div className="stack" style={{ gap: '4px' }}>
-                    <label className="label" style={{ margin: 0 }}>Quantidade</label>
+              <div className="search-card" style={{ padding: '24px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  <div className="stack" style={{ gap: '4px', width: '90px' }}>
+                    <label className="label" style={{ margin: 0, fontSize: '10px', textTransform: 'uppercase', fontWeight: 800, opacity: 0.5 }}>Quantidade</label>
                     <input 
                       type="number" 
                       className="input" 
                       value={qtd} 
                       onChange={e => setQtd(Math.max(1, Number(e.target.value)))}
-                      style={{ width: '80px', height: '48px' }}
+                      style={{ height: '48px', textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, padding: 0 }}
                     />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', flex: 1 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', flex: 1, alignSelf: 'flex-end' }}>
                     <button 
                       className="btn secondary" 
-                      style={{ height: '48px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                      style={{ height: '48px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderRadius: '12px' }}
                       onClick={() => handleAddToCart(false)}
                     >
                       <span style={{ fontSize: '1.2rem' }}>🛒</span> No Carrinho
                     </button>
                     <button 
                       className="btn" 
-                      style={{ height: '48px', whiteSpace: 'nowrap', fontSize: '1rem' }}
+                      style={{ height: '48px', whiteSpace: 'nowrap', fontSize: '1rem', borderRadius: '12px' }}
                       onClick={() => handleAddToCart(true)}
                     >
                       Comprar Agora

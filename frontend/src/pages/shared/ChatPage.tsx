@@ -24,7 +24,6 @@ interface Message {
 }
 
 export function ChatPage() {
-  const { auth } = useAuth()
   const meId = getUserIdFromToken()
   const navigate = useNavigate()
   const { userId: activeUserId } = useParams()

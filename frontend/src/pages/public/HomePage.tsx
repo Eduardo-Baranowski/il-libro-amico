@@ -3,6 +3,13 @@ import { Link } from 'react-router-dom'
 
 import { api } from '../../lib/api'
 import type { FeedItem } from '../../lib/types'
+import { StarRating } from '../../app/components/StarRating'
+
+const statusLabels: Record<string, string> = {
+  quero_ler: 'Quero ler',
+  lendo: 'Lendo',
+  lido: 'Lido'
+}
 
 export function HomePage() {
   const q = useQuery({
@@ -37,8 +44,12 @@ export function HomePage() {
               <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
                 <div className="row" style={{ alignItems: 'center' }}>
                   <span className="pill primary">{it.leitor.nome}</span>
-                  <span className="pill">{it.status}</span>
-                  {it.nota ? <span className="pill">nota {it.nota}/5</span> : null}
+                  <span className="pill">{statusLabels[it.status] || it.status}</span>
+                  {it.nota ? (
+                    <div style={{ marginLeft: '8px' }}>
+                      <StarRating rating={it.nota} size={16} />
+                    </div>
+                  ) : null}
                 </div>
                 <div className="muted">
                   {it.criado_em ? new Date(it.criado_em).toLocaleString() : ''}
@@ -51,10 +62,10 @@ export function HomePage() {
                     <img
                       src={it.livro.imagem_url}
                       alt={it.livro.titulo}
-                      style={{ width: 72, height: 96, objectFit: 'cover', borderRadius: 10, border: '1px solid #e2e8f0' }}
+                      style={{ width: 120, height: 160, objectFit: 'cover', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                     />
                   ) : (
-                    <div style={{ width: 72, height: 96, borderRadius: 10, border: '1px solid #e2e8f0', background: '#f1f5f9' }} />
+                    <div style={{ width: 120, height: 160, borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>📖</div>
                   )}
                 </Link>
                 <div style={{ flex: 1, minWidth: 220 }}>

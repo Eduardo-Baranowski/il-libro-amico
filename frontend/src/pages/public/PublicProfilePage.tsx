@@ -17,6 +17,7 @@ export function PublicProfilePage() {
   const meId = getUserIdFromToken()
   const viewedId = userId ? Number(userId) : null
   const isOwnProfile = meId != null && viewedId != null && meId === viewedId
+  
   const visitQ = useQuery({
     queryKey: ['publicVisit', userId],
     enabled: Boolean(userId),
@@ -80,24 +81,25 @@ export function PublicProfilePage() {
   const relation = relationQ.data
 
   const connectLabel = relation?.is_friend
-    ? 'Connected'
+    ? 'Conectado'
     : relation?.incoming_pending
-      ? 'Accept Connection'
+      ? 'Aceitar Conexão'
       : relation?.outgoing_pending
-        ? 'Pending'
-        : 'Connect'
+        ? 'Pendente'
+        : 'Conectar'
+
   return (
     <div className="visit-layout">
       <aside className="visit-sidebar">
-        <h3>Library Portal</h3>
-        <p>Academic Management</p>
+        <h3>Portal da Biblioteca</h3>
+        <p>Gestão de Conhecimento</p>
         <nav>
-          <a>Dashboard</a>
-          <a>Catalog</a>
-          <a className="active">Research Hub</a>
-          <a>Contributions</a>
-          <a>My Profile</a>
-          <a>Settings</a>
+          <Link to="/">Painel</Link>
+          <Link to="/livros">Catálogo</Link>
+          <Link to="/">Centro de Pesquisa</Link>
+          <Link to="/leitor/leituras">Contribuições</Link>
+          <Link to={`/perfil/${meId}`}>Meu Perfil</Link>
+          <Link to="/configuracoes">Configurações</Link>
         </nav>
       </aside>
 
@@ -116,7 +118,7 @@ export function PublicProfilePage() {
               {auth.token && !isOwnProfile ? (
                 <>
                   <button className="btn" type="button" onClick={() => setShowChat((v) => !v)}>
-                    {showChat ? 'Close chat' : 'Message'}
+                    {showChat ? 'Fechar chat' : 'Enviar Mensagem'}
                   </button>
                   <button
                     className="btn secondary"
@@ -132,11 +134,11 @@ export function PublicProfilePage() {
                     onClick={() => followM.mutate(Boolean(relation?.following))}
                     disabled={followM.isPending}
                   >
-                    {relation?.following ? 'Unfollow' : 'Follow'}
+                    {relation?.following ? 'Deixar de seguir' : 'Seguir'}
                   </button>
                 </>
               ) : auth.token && isOwnProfile ? (
-                <span className="pill primary">Este e seu perfil</span>
+                <span className="pill primary">Este é o seu perfil</span>
               ) : (
                 <Link className="btn" to="/entrar">
                   Entrar para interagir
@@ -145,13 +147,14 @@ export function PublicProfilePage() {
             </div>
           </div>
           <div className="visit-bio">
-            <h4>Academic Biography</h4>
-            <p>{profile.user.bio}</p>
+            <h4>Biografia Acadêmica</h4>
+            <p>{profile.user.bio || 'Nenhuma biografia informada.'}</p>
           </div>
         </div>
+        
         {showChat ? (
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>Chat</h3>
+            <h3 style={{ marginTop: 0 }}>Conversa com {u.nome}</h3>
             <div className="chat-thread">
               {messagesQ.data?.length ? (
                 messagesQ.data.map((m) => (
@@ -161,7 +164,7 @@ export function PublicProfilePage() {
                   </div>
                 ))
               ) : (
-                <p className="muted">Sem mensagens ainda.</p>
+                <p className="muted" style={{ textAlign: 'center', padding: '20px' }}>Sem mensagens ainda. Comece uma conversa!</p>
               )}
             </div>
             <div className="row" style={{ marginTop: 10 }}>
@@ -187,31 +190,31 @@ export function PublicProfilePage() {
         <div className="visit-grid">
           <div>
             <div className="visit-section-title">
-              <h3>Featured Contributions</h3>
+              <h3>Contribuições em Destaque</h3>
             </div>
             <div className="visit-cards">
-              {profile.featured.map((item) => (
+              {profile.featured.length ? profile.featured.map((item) => (
                 <Link key={item.id} className="search-card" to={`/livro/${item.id}`}>
-                  <div className="request-thumb">{item.imagem_url ? <img src={item.imagem_url} alt={item.titulo} /> : <span>Sem capa</span>}</div>
+                  <div className="request-thumb sm">{item.imagem_url ? <img src={item.imagem_url} alt={item.titulo} /> : <span>Sem capa</span>}</div>
                   <div>
                     <strong>{item.titulo}</strong>
                     <div className="muted">{item.autor}</div>
                   </div>
                 </Link>
-              ))}
+              )) : <p className="muted">Nenhuma contribuição em destaque.</p>}
             </div>
 
             <div className="card" style={{ marginTop: 16 }}>
-              <h3 style={{ marginTop: 0 }}>Scholarly Reading Log</h3>
+              <h3 style={{ marginTop: 0 }}>Diário de Leitura</h3>
               <div className="stack">
                 {profile.reading_log.length ? (
                   profile.reading_log.map((r) => (
                     <div key={r.id} className="search-card">
-                      <div className="avatar-circle">R</div>
+                      <div className="avatar-circle">📖</div>
                       <div>
                         <strong>{r.titulo}</strong>
                         <div className="muted">
-                          {r.autor} - {r.status}
+                          {r.autor} — <span style={{ textTransform: 'capitalize' }}>{r.status.replace('_', ' ')}</span>
                         </div>
                       </div>
                     </div>
@@ -225,59 +228,59 @@ export function PublicProfilePage() {
 
           <div className="stack">
             <div className="card">
-              <h4 style={{ marginTop: 0 }}>Archive Statistics</h4>
+              <h4 style={{ marginTop: 0 }}>Estatísticas do Acervo</h4>
               <div className="visit-stats">
                 <div>
                   <strong>{profile.stats.publications}</strong>
-                  <span>Publications</span>
+                  <span>Publicações</span>
                 </div>
                 <div>
                   <strong>{profile.stats.citations}</strong>
-                  <span>Citations</span>
+                  <span>Citações</span>
                 </div>
                 <div>
                   <strong>{profile.stats.tenure}</strong>
-                  <span>Academic Tenure</span>
+                  <span>Anos na Rede</span>
                 </div>
                 <div>
                   <strong>{profile.stats.contributions}</strong>
-                  <span>Contributions</span>
+                  <span>Ações</span>
                 </div>
                 <div>
                   <strong>{profile.stats.followers}</strong>
-                  <span>Followers</span>
+                  <span>Seguidores</span>
                 </div>
                 <div>
                   <strong>{profile.stats.following}</strong>
-                  <span>Following</span>
+                  <span>Seguindo</span>
                 </div>
                 <div>
                   <strong>{profile.stats.friends}</strong>
-                  <span>Friends</span>
+                  <span>Conexões</span>
                 </div>
               </div>
             </div>
 
             <div className="card">
-              <h4 style={{ marginTop: 0 }}>Research Specialization</h4>
-              <div className="row">
-                {profile.specializations.map((s) => (
-                  <span key={s} className="pill">
+              <h4 style={{ marginTop: 0 }}>Especializações</h4>
+              <div className="row" style={{ gap: '8px' }}>
+                {profile.specializations.length ? profile.specializations.map((s) => (
+                  <span key={s} className="pill" style={{ fontSize: '11px', padding: '4px 12px', minHeight: 'unset' }}>
                     {s}
                   </span>
-                ))}
+                )) : <span className="muted" style={{ fontSize: '12px' }}>Nenhuma especialização</span>}
               </div>
             </div>
 
             <div className="card">
-              <h4 style={{ marginTop: 0 }}>Affiliations</h4>
+              <h4 style={{ marginTop: 0 }}>Afiliações</h4>
               <div className="stack">
-                {profile.affiliations.map((a) => (
-                  <div key={a.nome}>
+                {profile.affiliations.length ? profile.affiliations.map((a) => (
+                  <div key={a.nome} style={{ fontSize: '14px' }}>
                     <strong>{a.nome}</strong>
-                    <div className="muted">{a.cargo}</div>
+                    <div className="muted" style={{ fontSize: '12px' }}>{a.cargo}</div>
                   </div>
-                ))}
+                )) : <p className="muted" style={{ fontSize: '12px' }}>Nenhuma afiliação listada.</p>}
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { env } from './env'
-import { getToken } from './token'
+import { getToken, clearToken } from './token'
 
 export type ApiError = { status: number; message: string }
 
@@ -30,6 +30,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   })
 
   if (!res.ok) {
+    if (res.status === 401) {
+      clearToken()
+      window.location.href = '/entrar?expired=true'
+      return undefined as any
+    }
     const body = (await parseJsonSafe(res)) as any
     const msg = body?.message || body?.msg || res.statusText || 'Erro'
     throw { status: res.status, message: String(msg) } satisfies ApiError

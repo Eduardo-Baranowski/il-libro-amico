@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../app/AuthProvider'
 import { getUserIdFromToken } from '../../lib/token'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import { toast } from 'react-hot-toast'
 import type { VisitProfile } from '../../lib/types'
 
 export function SettingsPage() {
@@ -46,9 +48,9 @@ export function SettingsPage() {
     onSuccess: () => {
       setSenhaAtual('')
       setNovaSenha('')
-      alert('Senha alterada com sucesso!')
+      toast.success('Senha alterada com sucesso!')
     },
-    onError: (err: any) => alert(err.message),
+    onError: (err: any) => toast.error(err.message),
   })
 
   const deleteAccountM = useMutation({
@@ -91,12 +93,12 @@ export function SettingsPage() {
              </div>
           </div>
           <nav>
-            <a className="nav-link">Painel</a>
-            <a className="nav-link">Catálogo</a>
-            <a className="nav-link">Centro de Pesquisa</a>
-            <a className="nav-link">Contribuições</a>
-            <a className="nav-link">Meu Perfil</a>
-            <a className="nav-link active">Configurações</a>
+            <Link to="/" className="nav-link">Painel</Link>
+            <Link to="/livros" className="nav-link">Catálogo</Link>
+            <Link to="/" className="nav-link">Centro de Pesquisa</Link>
+            <Link to="/leitor/leituras" className="nav-link">Contribuições</Link>
+            <Link to={`/perfil/${meId}`} className="nav-link">Meu Perfil</Link>
+            <Link to="/configuracoes" className="nav-link active">Configurações</Link>
           </nav>
           
           <div style={{ marginTop: '40px', padding: '16px', borderTop: '1px solid var(--border)' }}>

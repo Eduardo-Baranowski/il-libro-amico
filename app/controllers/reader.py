@@ -7,12 +7,14 @@ from ..models.compra import Compra
 from ..models.follow import Follow
 from ..models.friendship import Friendship
 from ..models.message import Message
+from ..models.pedido import Pedido, ItemPedido
 from .. import db, bcrypt
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from functools import wraps
 import os
 from ..utils import image_url, save_image
 from datetime import datetime, timezone
+from decimal import Decimal
 
 reader_bp = Blueprint('reader', __name__)
 
@@ -1028,9 +1030,13 @@ def create_order():
         
         for item in items_data:
             livro = Livro.query.get(item['livro_id'])
-            if not livro or livro.estoque < item['quantidade']:
+            if not livro:
                 db.session.rollback()
-                return jsonify({"message": f"Livro {livro.titulo if livro else 'ID '+str(item['livro_id'])} fora de estoque ou não encontrado"}), 400
+                return jsonify({"message": f"Livro ID {item['livro_id']} não encontrado"}), 400
+            
+            if livro.estoque < item['quantidade']:
+                db.session.rollback()
+                return jsonify({"message": f"O livro '{livro.titulo}' possui apenas {livro.estoque} unidades em estoque."}), 400
             
             # Subtrair estoque
             livro.estoque -= item['quantidade']

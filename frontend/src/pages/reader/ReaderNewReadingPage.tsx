@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-
+import { toast } from 'react-hot-toast'
 import { api } from '../../lib/api'
 import type { BookPublic } from '../../lib/types'
+import { StarRating } from '../../app/components/StarRating'
 
 type Status = 'quero_ler' | 'lendo' | 'lido'
 
@@ -37,7 +38,7 @@ export function ReaderNewReadingPage() {
       setStatus('lendo')
       setNota('')
       setComentario('')
-      alert('Leitura registrada!')
+      toast.success('Leitura registrada!')
     },
   })
 
@@ -66,24 +67,22 @@ export function ReaderNewReadingPage() {
           <div style={{ flex: 1, minWidth: 200 }}>
             <label className="label">Status</label>
             <select className="input" value={status} onChange={(e) => setStatus(e.target.value as Status)}>
-              <option value="quero_ler">quero_ler</option>
-              <option value="lendo">lendo</option>
-              <option value="lido">lido</option>
+              <option value="quero_ler">Quero ler</option>
+              <option value="lendo">Lendo</option>
+              <option value="lido">Já li</option>
             </select>
           </div>
+
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label className="label">Nota (1-5)</label>
-            <input
-              className="input"
-              inputMode="numeric"
-              value={nota}
-              onChange={(e) => {
-                const v = e.target.value
-                if (!v) return setNota('')
-                const n = Number(v)
-                if (Number.isFinite(n)) setNota(n)
-              }}
-            />
+            <label className="label">Sua Avaliação</label>
+            <div style={{ height: '48px', display: 'flex', alignItems: 'center' }}>
+              <StarRating 
+                rating={Number(nota) || 0} 
+                onChange={(val) => setNota(val)} 
+                editable 
+                size={28} 
+              />
+            </div>
           </div>
         </div>
 

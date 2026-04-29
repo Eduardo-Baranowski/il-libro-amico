@@ -21,27 +21,57 @@ interface CartContextValue {
 const CartContext = createContext<CartContextValue | null>(null)
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  // Carregamento inicial com higienização
   const [items, setItems] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('cart')
-    return saved ? JSON.parse(saved) : []
+    if (!saved) return []
+    try {
+      const parsed = JSON.parse(saved)
+      if (!Array.isArray(parsed)) return []
+      
+      return parsed.map((it: any) => {
+        const rawPreco = String(it.preco || '0')
+        return {
+          ...it,
+          preco: parseFloat(rawPreco.replace(',', '.')),
+          quantidade: Number(it.quantidade) || 1
+        }
+      })
+    } catch {
+      return []
+    }
   })
 
+  // Sincroniza com localStorage
   useEffect(() => {
     localStorage.setItem('cart', JSON.stringify(items))
   }, [items])
 
-  const totalItems = useMemo(() => items.reduce((acc, it) => acc + (it.quantidade || 0), 0), [items])
-  const totalPrice = useMemo(() => items.reduce((acc, it) => acc + (Number(it.preco) || 0) * (it.quantidade || 0), 0), [items])
+  // Cálculos de totais
+  const totalItems = useMemo(() => {
+    return items.reduce((acc, it) => acc + (it.quantidade || 0), 0)
+  }, [items])
 
+  const totalPrice = useMemo(() => {
+    return items.reduce((acc, it) => acc + (it.preco * it.quantidade), 0)
+  }, [items])
+
+  // Ações do carrinho
   const value = useMemo<CartContextValue>(() => ({
     items,
+    totalItems,
+    totalPrice,
     addItem: (item) => {
+      const rawPreco = String(item.preco || '0')
+      const cleanPrice = parseFloat(rawPreco.replace(',', '.'))
+      const newItem = { ...item, preco: cleanPrice || 0 }
+
       setItems(prev => {
-        const existing = prev.find(i => i.id === item.id)
+        const existing = prev.find(i => i.id === newItem.id)
         if (existing) {
-          return prev.map(i => i.id === item.id ? { ...i, quantidade: i.quantidade + item.quantidade } : i)
+          return prev.map(i => i.id === newItem.id ? { ...i, quantidade: i.quantidade + newItem.quantidade } : i)
         }
-        return [...prev, item]
+        return [...prev, newItem]
       })
     },
     removeItem: (id) => {
@@ -57,7 +87,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }))
     },
     clearCart: () => setItems([])
-  }), [items])
+  }), [items, totalItems, totalPrice])
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
 }
