@@ -1,458 +1,299 @@
-import { Link, useParams, useNavigate } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
-import type { RelationStatus, VisitProfile, Order, PaginatedResponse } from '../../lib/types'
-import { useAuth } from '../../app/AuthProvider'
 import { getUserIdFromToken } from '../../lib/token'
-import { ConfirmModal } from '../../app/components/ConfirmModal'
-import { Pagination } from '../../app/components/Pagination'
+import { StarRating } from '../../app/components/StarRating'
+import type { BookPublic, PaginatedResponse, Order } from '../../lib/types'
+
+interface ProfileData {
+  user: {
+    id: number
+    nome: string
+    papel: string
+    imagem_url: string | null
+    headline: string | null
+    bio: string | null
+  }
+  stats: {
+    publications: number
+    citations: number
+    tenure: string
+    followers: number
+    following: number
+  }
+  featured: Array<{
+    id: number
+    titulo: string
+    imagem_url: string | null
+    autor: string
+    tipo: string
+  }>
+}
+
+interface Reading {
+  id: number
+  livro: BookPublic
+  status: 'quero_ler' | 'lendo' | 'lido'
+  nota: number | null
+  comentario: string | null
+  criado_em: string
+}
 
 export function PublicProfilePage() {
-  const qc = useQueryClient()
-  const navigate = useNavigate()
-  const { auth } = useAuth()
   const { userId } = useParams()
-  const [readingToDelete, setReadingToDelete] = useState<number | null>(null)
-  const [expandedOrders, setExpandedOrders] = useState<Record<number, boolean>>({})
-  const [orderPage, setOrderPage] = useState(1)
-
   const meId = getUserIdFromToken()
-  const viewedId = userId ? Number(userId) : null
-  const isOwnProfile = meId != null && viewedId != null && meId === viewedId
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const isOwnProfile = String(meId) === String(userId)
   
-  const visitQ = useQuery({
-    queryKey: ['publicVisit', userId],
-    enabled: Boolean(userId),
-    queryFn: () => api<VisitProfile>(`/reader/users/${userId}/visit`),
+  const [orderPage, setOrderPage] = useState(1)
+  const [expandedOrders, setExpandedOrders] = useState<Record<number, boolean>>({})
+  const loadMoreReadingsRef = useRef<HTMLDivElement>(null)
+
+  const profileQ = useQuery({
+    queryKey: ['publicProfile', userId],
+    queryFn: () => api<ProfileData>(`/reader/users/${userId}/visit`),
   })
-  
-  const relationQ = useQuery({
-    queryKey: ['relationStatus', userId],
-    enabled: Boolean(userId) && Boolean(auth.token),
-    queryFn: () => api<RelationStatus>(`/reader/users/${userId}/relation`),
+
+  // Infinite Scroll for Readings
+  const {
+    data: readingsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isReadingsLoading
+  } = useInfiniteQuery({
+    queryKey: ['publicReadings-infinite', userId],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) => api<PaginatedResponse<Reading>>(`/reader/readings?user_id=${userId}&page=${pageParam}&per_page=6`),
+    getNextPageParam: (lastPage) => (lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined),
   })
 
   const ordersQ = useQuery({
-    queryKey: ['myOrders', orderPage],
+    queryKey: ['publicOrders', userId, orderPage],
     enabled: isOwnProfile,
-    queryFn: () => api<PaginatedResponse<Order>>(`/reader/orders?page=${orderPage}&per_page=8`),
-  })
-
-  const followM = useMutation({
-    mutationFn: (following: boolean) =>
-      api<{ message: string }>(`/reader/users/${userId}/follow`, {
-        method: following ? 'DELETE' : 'POST',
-      }),
-    onSuccess: async () => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ['relationStatus', userId] }),
-        qc.invalidateQueries({ queryKey: ['publicVisit', userId] }),
-      ])
-    },
-  })
-  
-  const connectM = useMutation({
-    mutationFn: (isFriend: boolean) =>
-      api<{ message: string }>(`/reader/users/${userId}/connect`, {
-        method: isFriend ? 'DELETE' : 'POST',
-      }),
-    onSuccess: async () => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ['relationStatus', userId] }),
-        qc.invalidateQueries({ queryKey: ['publicVisit', userId] }),
-      ])
-    },
+    queryFn: () => api<PaginatedResponse<Order>>(`/reader/orders?page=${orderPage}&per_page=5`),
   })
 
   const deleteReadingM = useMutation({
     mutationFn: (id: number) => api(`/reader/readings/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      toast.success('Leitura removida com sucesso!')
-      setReadingToDelete(null)
-      qc.invalidateQueries({ queryKey: ['publicVisit', userId] })
-    },
-    onError: (err: any) => toast.error(err.message || 'Erro ao remover')
+      toast.success('Registro removido')
+      qc.invalidateQueries({ queryKey: ['publicReadings-infinite', userId] })
+      qc.invalidateQueries({ queryKey: ['publicProfile', userId] })
+    }
   })
 
-  const toggleOrder = (orderId: number) => {
-    setExpandedOrders(prev => ({
-      ...prev,
-      [orderId]: !prev[orderId]
-    }))
+  // Intersection Observer for Infinite Scroll
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          console.log('Fetching next page of readings...')
+          fetchNextPage()
+        }
+      },
+      { threshold: 0.5, rootMargin: '100px' }
+    )
+    if (loadMoreReadingsRef.current) obs.observe(loadMoreReadingsRef.current)
+    return () => obs.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  const toggleOrder = (id: number) => {
+    setExpandedOrders(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  if (visitQ.isLoading) return <div className="container" style={{ padding: '40px', textAlign: 'center' }}>Carregando perfil...</div>
-  if (visitQ.isError) return <div className="container error" style={{ padding: '40px', textAlign: 'center' }}>Erro ao carregar perfil.</div>
-  if (!visitQ.data) return <div className="container muted" style={{ padding: '40px', textAlign: 'center' }}>Perfil não encontrado.</div>
+  if (profileQ.isLoading) return <div className="container muted">Carregando perfil...</div>
+  if (!profileQ.data) return <div className="container error">Usuário não encontrado.</div>
 
-  const profile = visitQ.data
-  const u = profile.user
-  const relation = relationQ.data
-
-  const connectLabel = relation?.is_friend
-    ? 'Conectado'
-    : relation?.incoming_pending
-      ? 'Aceitar Conexão'
-      : relation?.outgoing_pending
-        ? 'Pendente'
-        : 'Conectar'
+  const p = profileQ.data
+  const allReadings = readingsData?.pages.flatMap(pg => pg.items) ?? []
 
   return (
-    <div className="visit-layout">
-      <aside className="visit-sidebar">
-        <h3>Portal da Biblioteca</h3>
-        <p>Gestão de Conhecimento</p>
-        <nav>
-          <Link to="/">Painel</Link>
-          <Link to="/livros">Catálogo</Link>
-          <Link to="/">Centro de Pesquisa</Link>
-          <Link to="/leitor/leituras">Contribuições</Link>
-          <Link to={`/perfil/${meId}`}>Meu Perfil</Link>
-          <Link to="/configuracoes">Configurações</Link>
-        </nav>
-      </aside>
-
-      <section className="visit-main">
-        <div className="visit-hero">
-          <div className="visit-banner" />
-          <div className="visit-header">
-            <div className="avatar-circle visit-avatar">
-              {u.imagem_url ? <img src={u.imagem_url} alt={u.nome} /> : <span>{u.nome.slice(0, 1).toUpperCase()}</span>}
+    <div className="card-container" style={{ paddingTop: '32px' }}>
+      <div className="settings-grid" style={{ gridTemplateColumns: '280px 1fr' }}>
+        {/* Sidebar fixa com infos básicas */}
+        <aside className="stack" style={{ gap: '20px' }}>
+          <div className="card" style={{ textAlign: 'center', padding: '32px 24px' }}>
+            <div className="avatar-circle" style={{ width: '120px', height: '120px', margin: '0 auto 20px', border: '4px solid var(--primary-soft)', fontSize: '2.5rem', background: 'var(--primary-soft)', color: 'var(--primary)', fontWeight: 800 }}>
+              {p.user.imagem_url ? <img src={p.user.imagem_url} alt={p.user.nome} /> : <span>{p.user.nome.slice(0, 1).toUpperCase()}</span>}
             </div>
-            <div style={{ flex: 1, paddingBottom: '8px' }}>
-              <h1 style={{ 
-                margin: 0, 
-                fontSize: '2.4rem', 
-                fontWeight: 900, 
-                color: 'var(--primary)', 
-                letterSpacing: '-1.5px',
-                lineHeight: 1
-              }}>
-                {u.nome}
-              </h1>
-              <p style={{ 
-                margin: '8px 0 0', 
-                fontSize: '1.1rem', 
-                color: 'var(--muted)',
-                fontWeight: 500
-              }}>
-                {profile.user.headline || 'Membro da comunidade'}
-              </p>
-            </div>
-            <div className="row" style={{ paddingBottom: '12px' }}>
-              {auth.token && !isOwnProfile ? (
-                <>
-                  <button className="btn" type="button" onClick={() => navigate(`/mensagens/${userId}`)}>
-                    Enviar Mensagem
-                  </button>
-                  <button
-                    className="btn secondary"
-                    type="button"
-                    onClick={() => connectM.mutate(Boolean(relation?.is_friend))}
-                    disabled={connectM.isPending || relation?.outgoing_pending === true}
-                  >
-                    {connectLabel}
-                  </button>
-                  <button
-                    className="btn secondary"
-                    type="button"
-                    onClick={() => followM.mutate(Boolean(relation?.following))}
-                    disabled={followM.isPending}
-                  >
-                    {relation?.following ? 'Deixar de seguir' : 'Seguir'}
-                  </button>
-                </>
-              ) : auth.token && isOwnProfile ? (
-                <span className="pill primary" style={{ fontWeight: 800 }}>✓ Este é o seu perfil</span>
-              ) : (
-                <Link className="btn" to="/entrar">
-                  Entrar para interagir
-                </Link>
-              )}
-            </div>
-          </div>
-          <div className="visit-bio">
-            <h4>Biografia Acadêmica</h4>
-            <p>{profile.user.bio || 'Nenhuma biografia informada.'}</p>
-          </div>
-        </div>
-
-        <div className="visit-grid">
-          <div className="stack" style={{ gap: '32px' }}>
-            {/* Contribuições em Destaque */}
-            <div>
-              <div className="visit-section-title">
-                <h3>Contribuições em Destaque</h3>
-              </div>
-              <div className="visit-cards">
-                {profile.featured.length ? profile.featured.map((item) => (
-                  <Link key={item.id} className="search-card" to={`/livro/${item.id}`}>
-                    <div className="request-thumb sm">{item.imagem_url ? <img src={item.imagem_url} alt={item.titulo} /> : <span>Sem capa</span>}</div>
-                    <div>
-                      <strong>{item.titulo}</strong>
-                      <div className="muted">{item.autor}</div>
-                    </div>
-                  </Link>
-                )) : <p className="muted">Nenhuma contribuição em destaque.</p>}
-              </div>
-            </div>
-
-            {/* Histórico de Pedidos (Privado & Paginação) */}
+            <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900 }}>{p.user.nome}</h2>
+            <p className="muted small" style={{ fontWeight: 700, textTransform: 'uppercase', marginTop: '4px' }}>{p.user.papel}</p>
+            
             {isOwnProfile && (
-              <div>
-                <div className="visit-section-title">
-                  <h3>🛍️ Meu Histórico de Pedidos</h3>
-                </div>
-                <div className="stack" style={{ gap: '12px' }}>
-                  {ordersQ.isLoading && <p className="muted" style={{ textAlign: 'center' }}>Carregando pedidos...</p>}
-                  {ordersQ.data?.items.length ? (
-                    ordersQ.data.items.map(order => {
-                      const isExpanded = expandedOrders[order.id]
-                      return (
-                        <div key={order.id} className="card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface)' }}>
-                          {/* Cabeçalho do Pedido */}
-                          <div 
-                            onClick={() => toggleOrder(order.id)}
-                            style={{ 
-                              padding: '16px 24px', 
-                              cursor: 'pointer', 
-                              display: 'flex', 
-                              justifyContent: 'space-between', 
-                              alignItems: 'center',
-                              background: isExpanded ? 'var(--surface-2)' : 'transparent',
-                              transition: 'background 0.2s ease'
-                            }}
-                          >
-                            <div className="row" style={{ gap: '20px', alignItems: 'center' }}>
-                              <div style={{ 
-                                width: '40px', 
-                                height: '40px', 
-                                borderRadius: '10px', 
-                                background: 'var(--primary-soft)', 
-                                color: 'var(--primary)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '18px'
-                              }}>
-                                📦
-                              </div>
-                              <div>
-                                <strong style={{ display: 'block', fontSize: '15px' }}>Pedido #{order.id}</strong>
-                                <span className="muted small">{new Date(order.data).toLocaleDateString()} • {order.itens.length} {order.itens.length === 1 ? 'item' : 'itens'}</span>
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-                              <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1.1rem' }}>R$ {order.total}</div>
-                                <span className="pill success mini-pill" style={{ fontSize: '9px', textTransform: 'uppercase' }}>{order.status}</span>
-                              </div>
-                              <span style={{ 
-                                fontSize: '12px', 
-                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                transition: 'transform 0.3s ease',
-                                opacity: 0.5
-                              }}>▼</span>
-                            </div>
-                          </div>
-
-                          {/* Lista de Itens (Expandida) */}
-                          {isExpanded && (
-                            <div style={{ 
-                              padding: '12px 24px 24px', 
-                              background: 'var(--surface-2)',
-                              borderTop: '1px solid var(--border)',
-                              animation: 'slideDown 0.3s ease-out'
-                            }}>
-                              <div className="stack" style={{ gap: '12px' }}>
-                                {order.itens.map((item, idx) => (
-                                  <div key={idx} className="row" style={{ 
-                                    padding: '12px', 
-                                    background: 'var(--surface)', 
-                                    borderRadius: '12px',
-                                    alignItems: 'center',
-                                    gap: '16px',
-                                    border: '1px solid var(--border)'
-                                  }}>
-                                    <div style={{ width: '40px', height: '56px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                                      {item.imagem_url ? <img src={item.imagem_url} alt={item.titulo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-2)' }}>📖</div>}
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                      <div style={{ fontSize: '14px', fontWeight: 700 }}>{item.titulo}</div>
-                                      <div className="muted small">{item.quantidade}x R$ {item.preco_unitario}</div>
-                                    </div>
-                                    <div style={{ fontWeight: 700, fontSize: '14px' }}>
-                                      R$ {(Number(item.preco_unitario) * item.quantidade).toFixed(2)}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })
-                  ) : (
-                    !ordersQ.isLoading && <div className="card" style={{ padding: '32px', textAlign: 'center' }}>
-                      <p className="muted">Você ainda não realizou nenhum pedido.</p>
-                      <Link to="/livros" className="btn secondary" style={{ marginTop: '12px', display: 'inline-flex' }}>Explorar Catálogo</Link>
-                    </div>
-                  )}
-                  
-                  <Pagination 
-                    currentPage={orderPage} 
-                    totalPages={ordersQ.data?.pages ?? 1} 
-                    onPageChange={setOrderPage} 
-                    isLoading={ordersQ.isFetching}
-                  />
-                </div>
-              </div>
+               <Link to="/configuracoes" className="btn secondary small" style={{ marginTop: '20px', width: '100%', borderRadius: '12px' }}>Editar Perfil</Link>
             )}
+          </div>
 
-            {/* Diário de Leitura */}
-            <div>
-              <div className="visit-section-title">
-                <h3>📖 Diário de Leitura</h3>
-              </div>
-              <div className="stack" style={{ gap: '16px' }}>
-                {profile.reading_log.length ? (
-                  profile.reading_log.map((r) => (
-                    <div key={r.id} className="card" style={{ borderRadius: '16px', padding: '16px', border: '1px solid var(--border)', background: 'var(--surface)' }}>
-                      <div className="row" style={{ alignItems: 'flex-start', gap: '20px' }}>
-                        <div className="book-cover-sm" style={{ width: '80px', height: '110px', flexShrink: 0 }}>
-                           {r.imagem_url ? (
-                             <img src={r.imagem_url} alt={r.titulo} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                           ) : (
-                             <div style={{ width: '100%', height: '100%', background: 'var(--surface-2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📖</div>
-                           )}
-                        </div>
-                        
-                        <div style={{ flex: 1 }}>
-                          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div>
-                              <strong style={{ fontSize: '1.1rem', display: 'block' }}>{r.titulo}</strong>
-                              <div className="muted">{r.autor}</div>
-                            </div>
-                            <span className={`pill ${r.status === 'lido' ? 'success' : r.status === 'lendo' ? 'primary' : ''}`} style={{ textTransform: 'uppercase', fontSize: '10px' }}>
-                              {r.status.replace('_', ' ')}
-                            </span>
-                          </div>
+          <div className="card" style={{ padding: '24px', borderRadius: '16px' }}>
+            <h4 style={{ margin: '0 0 16px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.6 }}>Biografia</h4>
+            <p style={{ fontSize: '14px', lineHeight: '1.6', margin: 0 }}>{p.user.bio || 'Sem biografia disponível.'}</p>
+          </div>
+        </aside>
 
-                          <div style={{ marginTop: '12px' }}>
-                             {r.nota ? (
-                               <div className="row" style={{ gap: '4px', color: '#f59e0b' }}>
-                                 {Array.from({ length: 5 }).map((_, i) => (
-                                   <span key={i} style={{ fontSize: '16px' }}>{i < r.nota! ? '★' : '☆'}</span>
-                                 ))}
-                               </div>
-                             ) : (
-                               <span className="muted" style={{ fontSize: '12px' }}>Ainda não avaliado</span>
-                             )}
-                          </div>
+        {/* Conteúdo Principal */}
+        <main className="stack" style={{ gap: '32px' }}>
+          {/* Stats Grid */}
+          <div className="card" style={{ padding: '24px', borderRadius: '24px' }}>
+             <div className="row" style={{ justifyContent: 'space-between', gap: '24px' }}>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary)' }}>{p.stats.citations}</div>
+                  <div className="muted small" style={{ fontWeight: 700, textTransform: 'uppercase' }}>Citações</div>
+                </div>
+                <div style={{ width: '1px', background: 'var(--border)', opacity: 0.5 }} />
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary)' }}>{p.stats.tenure}</div>
+                  <div className="muted small" style={{ fontWeight: 700, textTransform: 'uppercase' }}>Na Rede</div>
+                </div>
+                <div style={{ width: '1px', background: 'var(--border)', opacity: 0.5 }} />
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--primary)' }}>{p.stats.followers}</div>
+                  <div className="muted small" style={{ fontWeight: 700, textTransform: 'uppercase' }}>Seguidores</div>
+                </div>
+             </div>
+          </div>
 
-                          {isOwnProfile && (
-                            <div className="row" style={{ marginTop: '16px', gap: '12px' }}>
-                              <Link 
-                                to={`/leitor/leituras/editar/${r.livro_id}`} 
-                                className="btn secondary" 
-                                style={{ fontSize: '12px', height: '32px', minHeight: 'unset', padding: '0 12px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                              >
-                                📝 Editar
-                              </Link>
-                              <button 
-                                className="btn secondary" 
-                                style={{ fontSize: '12px', height: '32px', minHeight: 'unset', padding: '0 12px', flex: 1, color: 'var(--error)', borderColor: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                                onClick={() => setReadingToDelete(r.id)}
-                              >
-                                🗑️ Remover
-                              </button>
-                            </div>
-                          )}
+          {/* Histórico de Pedidos (Somente Dono) */}
+          {isOwnProfile && (
+            <section>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', fontSize: '1.2rem', fontWeight: 800 }}>📦 Meu Histórico de Pedidos</h3>
+              <div className="stack" style={{ gap: '12px' }}>
+                {ordersQ.data?.items.map(order => (
+                  <div key={order.id} className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: '20px' }}>
+                    <div 
+                      onClick={() => toggleOrder(order.id)}
+                      style={{ padding: '20px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: expandedOrders[order.id] ? 'var(--surface-2)' : 'transparent', transition: 'background 0.2s' }}
+                    >
+                      <div className="row" style={{ alignItems: 'center', gap: '16px' }}>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--primary-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>📦</div>
+                        <div>
+                          <div style={{ fontWeight: 800 }}>Pedido #{order.id}</div>
+                          <div className="muted small">{new Date(order.data).toLocaleDateString()} • {order.itens.length} {order.itens.length === 1 ? 'Item' : 'Itens'}</div>
                         </div>
                       </div>
+                      <div className="row" style={{ alignItems: 'center', gap: '20px' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontWeight: 900, color: 'var(--primary)' }}>R$ {order.total}</div>
+                          <span className="pill success mini-pill" style={{ fontSize: '9px', marginTop: '4px' }}>{order.status}</span>
+                        </div>
+                        <span style={{ transform: expandedOrders[order.id] ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s', opacity: 0.5 }}>▼</span>
+                      </div>
                     </div>
-                  ))
-                ) : (
-                  <p className="muted" style={{ textAlign: 'center', padding: '40px' }}>Sem leituras registradas ainda.</p>
+                    
+                    {expandedOrders[order.id] && (
+                      <div style={{ padding: '24px', borderTop: '1px solid var(--border)', background: 'var(--surface)', animation: 'slideDown 0.3s ease' }}>
+                        <div className="stack" style={{ gap: '16px' }}>
+                          {order.itens.map((item, idx) => (
+                            <div key={idx} className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div className="row" style={{ gap: '16px', alignItems: 'center' }}>
+                                <img src={item.imagem_url} alt="" style={{ width: '45px', height: '64px', borderRadius: '8px', objectFit: 'cover', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }} />
+                                <div>
+                                  <div style={{ fontWeight: 700, fontSize: '14px' }}>{item.titulo}</div>
+                                  <div className="muted small">Qtd: {item.quantidade} • Unitário: R$ {item.preco_unitario}</div>
+                                </div>
+                              </div>
+                              <div style={{ fontWeight: 800, color: 'var(--primary)' }}>R$ {(Number(item.preco_unitario) * item.quantidade).toFixed(2)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                {ordersQ.data && ordersQ.data.pages > 1 && (
+                  <div className="row" style={{ justifyContent: 'center', marginTop: '12px', gap: '16px' }}>
+                    <button className="btn secondary small" style={{ borderRadius: '10px' }} disabled={orderPage === 1} onClick={() => setOrderPage(p => p - 1)}>Anterior</button>
+                    <span className="muted small" style={{ alignSelf: 'center', fontWeight: 700 }}>{orderPage} / {ordersQ.data.pages}</span>
+                    <button className="btn secondary small" style={{ borderRadius: '10px' }} disabled={orderPage === ordersQ.data.pages} onClick={() => setOrderPage(p => p + 1)}>Próximo</button>
+                  </div>
                 )}
               </div>
-            </div>
-          </div>
+            </section>
+          )}
 
-          <div className="stack">
-            <div className="card">
-              <h4 style={{ marginTop: 0 }}>Estatísticas do Acervo</h4>
-              <div className="visit-stats">
-                <div>
-                  <strong>{profile.stats.publications}</strong>
-                  <span>Publicações</span>
-                </div>
-                <div>
-                  <strong>{profile.stats.citations}</strong>
-                  <span>Citações</span>
-                </div>
-                <div>
-                  <strong>{profile.stats.tenure}</strong>
-                  <span>Anos na Rede</span>
-                </div>
-                <div>
-                  <strong>{profile.stats.contributions}</strong>
-                  <span>Ações</span>
-                </div>
-                <div>
-                  <strong>{profile.stats.followers}</strong>
-                  <span>Seguidores</span>
-                </div>
-                <div>
-                  <strong>{profile.stats.following}</strong>
-                  <span>Seguindo</span>
-                </div>
-                <div>
-                  <strong>{profile.stats.friends}</strong>
-                  <span>Conexões</span>
-                </div>
-              </div>
-            </div>
+          {/* Diário de Leitura (Infinite Scroll) */}
+          <section>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', fontSize: '1.2rem', fontWeight: 800 }}>📖 Diário de Leitura</h3>
+            <div className="stack" style={{ gap: '16px' }}>
+              {allReadings.map((r, idx) => (
+                <div key={`${r.id}-${idx}`} className="card" style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: '90px 1fr', 
+                  gap: '24px', 
+                  padding: '24px',
+                  borderRadius: '24px',
+                  animation: 'slideDown 0.4s ease forwards',
+                  animationDelay: `${(idx % 6) * 0.05}s`,
+                  opacity: 0
+                }}>
+                  <Link to={`/livro/${r.livro.id}`} className="hover-scale">
+                    {r.livro.imagem_url ? (
+                      <img src={r.livro.imagem_url} alt={r.livro.titulo} style={{ width: '100%', borderRadius: '12px', boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }} />
+                    ) : (
+                      <div className="avatar-circle" style={{ width: '100%', height: '120px', borderRadius: '12px', background: 'var(--surface-2)' }}>📖</div>
+                    )}
+                  </Link>
+                  <div className="stack" style={{ gap: '12px' }}>
+                    <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <Link to={`/livro/${r.livro.id}`}><h4 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: 'var(--primary)' }}>{r.livro.titulo}</h4></Link>
+                        <div className="muted" style={{ fontWeight: 600, fontSize: '14px' }}>{r.livro.autor}</div>
+                      </div>
+                      <span className={`pill ${r.status === 'lido' ? 'success' : 'primary'} mini-pill`} style={{ fontSize: '10px', fontWeight: 800 }}>
+                        {r.status === 'quero_ler' ? 'Quero ler' : r.status === 'lendo' ? 'Lendo' : 'Lido'}
+                      </span>
+                    </div>
 
-            <div className="card">
-              <h4 style={{ marginTop: 0 }}>Especializações</h4>
-              <div className="row" style={{ gap: '8px' }}>
-                {profile.specializations.length ? profile.specializations.map((s) => (
-                  <span key={s} className="pill" style={{ fontSize: '11px', padding: '4px 12px', minHeight: 'unset' }}>
-                    {s}
-                  </span>
-                )) : <span className="muted" style={{ fontSize: '12px' }}>Nenhuma especialização</span>}
-              </div>
-            </div>
+                    {r.nota && <StarRating rating={r.nota} size={14} />}
+                    {r.comentario && (
+                      <div style={{ background: 'var(--surface-2)', padding: '16px', borderRadius: '16px', fontSize: '14px', fontStyle: 'italic', color: 'var(--text)', opacity: 0.9 }}>
+                        "{r.comentario}"
+                      </div>
+                    )}
 
-            <div className="card">
-              <h4 style={{ marginTop: 0 }}>Afiliações</h4>
-              <div className="stack">
-                {profile.affiliations.length ? profile.affiliations.map((a) => (
-                  <div key={a.nome} style={{ fontSize: '14px' }}>
-                    <strong>{a.nome}</strong>
-                    <div className="muted" style={{ fontSize: '12px' }}>{a.cargo}</div>
+                    {isOwnProfile && (
+                      <div className="row" style={{ gap: '12px', marginTop: '12px' }}>
+                        <button className="btn secondary small" style={{ flex: 1, height: '36px', borderRadius: '10px', fontWeight: 700 }} onClick={() => navigate(`/leitor/leituras/editar/${r.livro.id}`)}>Editar</button>
+                        <button className="btn error small" style={{ flex: 1, height: '36px', borderRadius: '10px', background: 'transparent', color: 'var(--error)', border: '1px solid var(--error)' }} onClick={() => deleteReadingM.mutate(r.id)}>Remover</button>
+                      </div>
+                    )}
                   </div>
-                )) : <p className="muted" style={{ fontSize: '12px' }}>Nenhuma afiliação listada.</p>}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+                </div>
+              ))}
 
-      <ConfirmModal 
-        isOpen={readingToDelete !== null}
-        title="Remover Leitura"
-        message="Deseja remover este registro do seu diário de leitura? Esta ação não pode ser desfeita."
-        confirmLabel="Sim, Remover"
-        cancelLabel="Cancelar"
-        isDanger={true}
-        onConfirm={() => readingToDelete && deleteReadingM.mutate(readingToDelete)}
-        onCancel={() => setReadingToDelete(null)}
-      />
+              <div ref={loadMoreReadingsRef} style={{ padding: '48px 0', textAlign: 'center' }}>
+                {isFetchingNextPage ? (
+                  <div className="stack" style={{ gap: '12px' }}>
+                    <div className="spinner" style={{ margin: '0 auto' }}></div>
+                    <p className="muted small" style={{ fontWeight: 700, textTransform: 'uppercase' }}>Expandindo horizontes…</p>
+                  </div>
+                ) : hasNextPage ? (
+                  <button 
+                    className="btn secondary small" 
+                    onClick={() => fetchNextPage()}
+                    style={{ borderRadius: '12px', padding: '8px 24px' }}
+                  >
+                    Carregar mais registros
+                  </button>
+                ) : allReadings.length > 0 ? (
+                  <p className="muted small" style={{ fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.4 }}>✨ Você explorou todo o diário</p>
+                ) : null}
+              </div>
+
+              {allReadings.length === 0 && !isReadingsLoading && (
+                <div className="card" style={{ padding: '48px', textAlign: 'center', background: 'var(--surface-2)', border: '2px dashed var(--border)' }}>
+                   <p className="muted" style={{ fontWeight: 600 }}>Nenhum registro de leitura encontrado.</p>
+                </div>
+              )}
+            </div>
+          </section>
+        </main>
+      </div>
     </div>
   )
 }

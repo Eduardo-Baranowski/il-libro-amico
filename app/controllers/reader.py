@@ -737,14 +737,16 @@ def create_reading():
 
 @reader_bp.route("/readings", methods=["GET"])
 @jwt_required()
-@verificar_leitor
-def list_my_readings():
-    leitor_id = int(get_jwt_identity())
+def list_readings():
+    current_user_id = int(get_jwt_identity())
+    # Se user_id for passado na query, usa ele (para perfis públicos), caso contrário usa o logado
+    target_user_id = request.args.get('user_id', current_user_id, type=int)
+    
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
     
     pagination = (
-        Leitura.query.filter_by(leitor_id=leitor_id)
+        Leitura.query.filter_by(leitor_id=target_user_id)
         .order_by(Leitura.atualizado_em.desc(), Leitura.criado_em.desc())
         .paginate(page=page, per_page=per_page, error_out=False)
     )
