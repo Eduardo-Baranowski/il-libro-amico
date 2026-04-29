@@ -79,6 +79,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: '/leitor/leituras/editar/:bookId',
+        element: (
+          <RequireAuth role="leitor">
+            <ReaderNewReadingPage />
+          </RequireAuth>
+        ),
+      },
+      {
         path: '/leitor/nova-solicitacao',
         element: (
           <RequireAuth role="leitor">

@@ -6,12 +6,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import { toast } from 'react-hot-toast'
 import type { VisitProfile } from '../../lib/types'
+import { ConfirmModal } from '../../app/components/ConfirmModal'
 
 export function SettingsPage() {
   const qc = useQueryClient()
   const { auth, logout } = useAuth()
   const meId = getUserIdFromToken()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   
   const { data: profile, isLoading } = useQuery({
     queryKey: ['myProfile', meId],
@@ -31,7 +33,10 @@ export function SettingsPage() {
   // Mutations
   const updateProfileM = useMutation({
     mutationFn: (data: any) => api('/reader/profile', { method: 'PUT', body: JSON.stringify(data) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['myProfile', meId] }),
+    onSuccess: () => {
+      toast.success('Perfil atualizado!')
+      qc.invalidateQueries({ queryKey: ['myProfile', meId] })
+    },
   })
 
   const updatePhotoM = useMutation({
@@ -40,7 +45,10 @@ export function SettingsPage() {
       fd.append('imagem', file)
       return api('/reader/profile/photo', { method: 'POST', body: fd })
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['myProfile', meId] }),
+    onSuccess: () => {
+      toast.success('Foto atualizada!')
+      qc.invalidateQueries({ queryKey: ['myProfile', meId] })
+    },
   })
 
   const updatePasswordM = useMutation({
@@ -55,7 +63,10 @@ export function SettingsPage() {
 
   const deleteAccountM = useMutation({
     mutationFn: () => api('/reader/profile', { method: 'DELETE' }),
-    onSuccess: () => logout(),
+    onSuccess: () => {
+      toast.success('Conta excluída. Sentiremos sua falta!')
+      logout()
+    },
   })
 
   if (isLoading) return <div className="container">Carregando configurações...</div>
@@ -252,7 +263,7 @@ export function SettingsPage() {
             <button 
               className="btn secondary" 
               style={{ width: '100%', borderColor: '#fee2e2', color: 'var(--error)' }}
-              onClick={() => window.confirm('Tem certeza que deseja excluir sua conta?') && deleteAccountM.mutate()}
+              onClick={() => setShowDeleteModal(true)}
               disabled={deleteAccountM.isPending}
             >
               {deleteAccountM.isPending ? 'Excluindo...' : 'Desativar Conta'}
@@ -260,6 +271,17 @@ export function SettingsPage() {
           </div>
         </aside>
       </div>
+
+      <ConfirmModal 
+        isOpen={showDeleteModal}
+        title="Excluir Conta permanentemente?"
+        message="Esta ação é irreversível. Todos os seus dados, leituras e histórico serão apagados para sempre."
+        confirmLabel="Sim, Excluir tudo"
+        cancelLabel="Não, quero ficar"
+        isDanger={true}
+        onConfirm={() => deleteAccountM.mutate()}
+        onCancel={() => setShowDeleteModal(false)}
+      />
     </div>
   )
 }

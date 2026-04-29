@@ -590,6 +590,7 @@ def search():
     ), 200
 
 @reader_bp.route('/books/<int:id>', methods=['GET'])
+@jwt_required(optional=True)
 def get_book_details(id):
     """
     Obter detalhes de um livro (Público)
@@ -603,6 +604,28 @@ def get_book_details(id):
         description: Livro não encontrado
     """
     b = Livro.query.get_or_404(id)
+    my_reading = None
+
+    try:
+        from flask_jwt_extended import verify_jwt_in_request
+        # Verify if there is a token, but don't fail if not
+        verify_jwt_in_request(optional=True)
+        current_user_id = get_jwt_identity()
+        
+        if current_user_id:
+            user = User.query.get(int(current_user_id))
+            if user and user.papel == 'leitor':
+                r = Leitura.query.filter_by(leitor_id=user.id, livro_id=b.id).first()
+                if r:
+                    my_reading = {
+                        "status": r.status,
+                        "nota": r.nota,
+                        "comentario": r.comentario
+                    }
+    except Exception:
+        # If JWT verification fails for any reason, we just don't return the reading status
+        pass
+
     return jsonify({
         "id": b.id,
         "titulo": b.titulo,
@@ -622,7 +645,8 @@ def get_book_details(id):
         "imagem_url": image_url(b.imagem),
         "editora": b.editor.nome,
         "editora_imagem_url": image_url(b.editor.imagem),
-        "data_cadastro": b.data_cadastro.isoformat()
+        "data_cadastro": b.data_cadastro.isoformat(),
+        "my_reading": my_reading
     }), 200
 
 
@@ -683,17 +707,29 @@ def create_reading():
     if not livro:
         return jsonify({"message": "Livro não encontrado"}), 404
 
-    leitura = Leitura(
-        leitor_id=leitor_id,
-        livro_id=livro_id,
-        status=status,
-        nota=nota,
-        comentario=comentario,
-    )
-    db.session.add(leitura)
-    db.session.commit()
+    # Evitar duplicidade: verificar se já existe registro para este livro
+    leitura = Leitura.query.filter_by(leitor_id=leitor_id, livro_id=livro_id).first()
+    
+    if leitura:
+        leitura.status = status
+        leitura.nota = nota
+        leitura.comentario = comentario
+        msg = "Leitura atualizada"
+        status_code = 200
+    else:
+        leitura = Leitura(
+            leitor_id=leitor_id,
+            livro_id=livro_id,
+            status=status,
+            nota=nota,
+            comentario=comentario,
+        )
+        db.session.add(leitura)
+        msg = "Leitura registrada"
+        status_code = 201
 
-    return jsonify({"message": "Leitura registrada", "id": leitura.id}), 201
+    db.session.commit()
+    return jsonify({"message": msg, "id": leitura.id}), status_code
 
 
 @reader_bp.route("/readings", methods=["GET"])
@@ -738,6 +774,25 @@ def list_my_readings():
             for r in rows
         ]
     ), 200
+
+
+@reader_bp.route("/readings/<int:reading_id>", methods=["DELETE"])
+@jwt_required()
+@verificar_leitor
+def delete_reading(reading_id):
+    """
+    Remover um registro de leitura (Apenas Leitor)
+    """
+    leitor_id = int(get_jwt_identity())
+    leitura = Leitura.query.filter_by(id=reading_id, leitor_id=leitor_id).first()
+    
+    if not leitura:
+        return jsonify({"message": "Registro de leitura não encontrado"}), 404
+        
+    db.session.delete(leitura)
+    db.session.commit()
+    
+    return jsonify({"message": "Leitura removida com sucesso"}), 200
 
 
 @reader_bp.route("/feed", methods=["GET"])
