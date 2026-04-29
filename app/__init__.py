@@ -89,6 +89,7 @@ def create_app():
     from .models.follow import Follow  # noqa: F401
     from .models.friendship import Friendship  # noqa: F401
     from .models.message import Message  # noqa: F401
+    from .models.pedido import Pedido, ItemPedido  # noqa: F401
 
     @app.errorhandler(403)
     def _forbidden(_e):

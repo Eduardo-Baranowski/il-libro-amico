@@ -20,6 +20,10 @@ import { ReaderNewReadingPage } from '../pages/reader/ReaderNewReadingPage'
 
 import { EditorRequestsPage } from '../pages/editor/EditorRequestsPage'
 import { EditorBooksPage } from '../pages/editor/EditorBooksPage'
+import { SettingsPage } from '../pages/shared/SettingsPage'
+import { ChatPage } from '../pages/shared/ChatPage'
+import { CartPage } from '../pages/shared/CartPage'
+import { CheckoutPage } from '../pages/shared/CheckoutPage'
 
 export const router = createBrowserRouter([
   {
@@ -100,6 +104,46 @@ export const router = createBrowserRouter([
         ),
       },
 
+      {
+        path: '/configuracoes',
+        element: (
+          <RequireAuth>
+            <SettingsPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/mensagens',
+        element: (
+          <RequireAuth>
+            <ChatPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/mensagens/:userId',
+        element: (
+          <RequireAuth>
+            <ChatPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/carrinho',
+        element: (
+          <RequireAuth>
+            <CartPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/checkout',
+        element: (
+          <RequireAuth>
+            <CheckoutPage />
+          </RequireAuth>
+        ),
+      },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from ..models.user import User
 from ..models.request import Request
 from ..models.livro import Livro
@@ -7,10 +7,11 @@ from ..models.compra import Compra
 from ..models.follow import Follow
 from ..models.friendship import Friendship
 from ..models.message import Message
-from .. import db
+from .. import db, bcrypt
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from functools import wraps
-from ..utils import image_url
+import os
+from ..utils import image_url, save_image
 from datetime import datetime, timezone
 
 reader_bp = Blueprint('reader', __name__)
@@ -120,16 +121,8 @@ def get_public_user_visit(user_id):
                 "nome": user.nome,
                 "papel": user.papel,
                 "imagem_url": image_url(user.imagem),
-                "headline": (
-                    "Senior Scholar of Linguistics & Semiotics"
-                    if is_editor
-                    else "Leitor e pesquisador da comunidade"
-                ),
-                "bio": (
-                    "Dedicated to bridging scholarly rigor with contemporary digital reading practices."
-                    if is_editor
-                    else "Active reader documenting insights, reviews and curated reading journeys."
-                ),
+                "headline": user.headline or ("Senior Scholar" if is_editor else "Leitor da comunidade"),
+                "bio": user.bio or ("Dedicated to scholarly rigor." if is_editor else "Active reader."),
             },
             "stats": stats,
             "featured": [
@@ -626,6 +619,7 @@ def get_book_details(id):
         "imagem": b.imagem,
         "imagem_url": image_url(b.imagem),
         "editora": b.editor.nome,
+        "editora_imagem_url": image_url(b.editor.imagem),
         "data_cadastro": b.data_cadastro.isoformat()
     }), 200
 
@@ -962,3 +956,212 @@ def get_my_requests():
         })
     
     return jsonify(resultado), 200
+
+@reader_bp.route('/conversations', methods=['GET'])
+@jwt_required()
+def list_conversations():
+    current_id = int(get_jwt_identity())
+    
+    # Busca todos os usuários com quem houve troca de mensagens
+    sent_to = db.session.query(Message.receiver_id).filter_by(sender_id=current_id).distinct()
+    received_from = db.session.query(Message.sender_id).filter_by(receiver_id=current_id).distinct()
+    
+    user_ids = {uid[0] for uid in sent_to.all()} | {uid[0] for uid in received_from.all()}
+    
+    conversations = []
+    for uid in user_ids:
+        user = User.query.get(uid)
+        if not user:
+            continue
+            
+        # Pega a última mensagem entre eles
+        last_msg = Message.query.filter(
+            db.or_(
+                db.and_(Message.sender_id == current_id, Message.receiver_id == uid),
+                db.and_(Message.sender_id == uid, Message.receiver_id == current_id)
+            )
+        ).order_by(Message.data_envio.desc()).first()
+        
+        conversations.append({
+            "user_id": user.id,
+            "user_nome": user.nome,
+            "user_imagem_url": image_url(user.imagem),
+            "last_message": last_msg.conteudo if last_msg else "",
+            "last_message_time": last_msg.data_envio.isoformat() if last_msg else None,
+            "unread_count": Message.query.filter_by(sender_id=uid, receiver_id=current_id, lida=False).count()
+        })
+        
+    # Ordena pelas mais recentes
+    conversations.sort(key=lambda x: x['last_message_time'] or "", reverse=True)
+    
+    return jsonify(conversations), 200
+
+# --- ORDER MANAGEMENT ---
+
+@reader_bp.route('/orders', methods=['POST'])
+@jwt_required()
+def create_order():
+    current_id = int(get_jwt_identity())
+    data = request.get_json()
+    
+    items_data = data.get('items', [])
+    if not items_data:
+        return jsonify({"message": "Carrinho vazio"}), 400
+        
+    try:
+        # Criar o pedido base
+        novo_pedido = Pedido(
+            leitor_id=current_id,
+            endereco_rua=data.get('rua'),
+            endereco_numero=data.get('numero'),
+            endereco_bairro=data.get('bairro'),
+            endereco_cidade=data.get('cidade'),
+            endereco_estado=data.get('estado'),
+            endereco_cep=data.get('cep'),
+            metodo_pagamento=data.get('metodo_pagamento', 'simulado'),
+            total=Decimal("0.00")
+        )
+        db.session.add(novo_pedido)
+        db.session.flush() # Para pegar o ID do pedido
+        
+        total_acumulado = Decimal("0.00")
+        
+        for item in items_data:
+            livro = Livro.query.get(item['livro_id'])
+            if not livro or livro.estoque < item['quantidade']:
+                db.session.rollback()
+                return jsonify({"message": f"Livro {livro.titulo if livro else 'ID '+str(item['livro_id'])} fora de estoque ou não encontrado"}), 400
+            
+            # Subtrair estoque
+            livro.estoque -= item['quantidade']
+            
+            preco_unit = livro.preco
+            subtotal = preco_unit * item['quantidade']
+            total_acumulado += subtotal
+            
+            item_obj = ItemPedido(
+                pedido_id=novo_pedido.id,
+                livro_id=livro.id,
+                quantidade=item['quantidade'],
+                preco_unitario=preco_unit
+            )
+            db.session.add(item_obj)
+            
+        novo_pedido.total = total_acumulado
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Pedido realizado com sucesso",
+            "pedido_id": novo_pedido.id,
+            "total": str(total_acumulado)
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": str(e)}), 500
+
+@reader_bp.route('/orders', methods=['GET'])
+@jwt_required()
+def list_orders():
+    current_id = int(get_jwt_identity())
+    pedidos = Pedido.query.filter_by(leitor_id=current_id).order_by(Pedido.data_pedido.desc()).all()
+    
+    resultado = []
+    for p in pedidos:
+        resultado.append({
+            "id": p.id,
+            "data": p.data_pedido.isoformat(),
+            "status": p.status,
+            "total": str(p.total),
+            "itens": [{
+                "titulo": item.livro.titulo,
+                "quantidade": item.quantidade,
+                "preco_unitario": str(item.preco_unitario),
+                "imagem_url": image_url(item.livro.imagem)
+            } for item in p.itens]
+        })
+        
+    return jsonify(resultado), 200
+
+# --- PROFILE MANAGEMENT ---
+
+@reader_bp.route('/profile', methods=['PUT'])
+@jwt_required()
+def update_profile():
+    current_id = int(get_jwt_identity())
+    user = User.query.get(current_id)
+    if not user:
+        return jsonify({"message": "Usuário não encontrado"}), 404
+        
+    data = request.get_json() or {}
+    if 'nome' in data:
+        user.nome = data.get('nome')
+    if 'headline' in data:
+        user.headline = data.get('headline')
+    if 'bio' in data:
+        user.bio = data.get('bio')
+        
+    db.session.commit()
+    return jsonify({"message": "Perfil atualizado com sucesso"}), 200
+
+@reader_bp.route('/profile/photo', methods=['POST'])
+@jwt_required()
+def update_profile_photo():
+    current_id = int(get_jwt_identity())
+    user = User.query.get(current_id)
+    if not user:
+        return jsonify({"message": "Usuário não encontrado"}), 404
+        
+    if 'imagem' not in request.files:
+        return jsonify({"message": "Nenhum arquivo enviado"}), 400
+        
+    file = request.files['imagem']
+    if user.imagem:
+        old_path = os.path.join(current_app.config["UPLOAD_FOLDER"], user.imagem)
+        if os.path.exists(old_path):
+            os.remove(old_path)
+            
+    user.imagem = save_image(file, "users")
+    db.session.commit()
+    return jsonify({"message": "Foto atualizada", "imagem_url": image_url(user.imagem)}), 200
+
+@reader_bp.route('/profile/password', methods=['PUT'])
+@jwt_required()
+def update_password():
+    current_id = int(get_jwt_identity())
+    user = User.query.get(current_id)
+    if not user:
+        return jsonify({"message": "Usuário não encontrado"}), 404
+        
+    data = request.get_json() or {}
+    atual = data.get('senha_atual')
+    nova = data.get('nova_senha')
+    
+    if not atual or not nova:
+        return jsonify({"message": "Senhas atual e nova são obrigatórias"}), 400
+        
+    if not user.verificar_senha(atual):
+        return jsonify({"message": "Senha atual incorreta"}), 400
+        
+    user.senha_hash = bcrypt.generate_password_hash(nova).decode('utf-8')
+    db.session.commit()
+    return jsonify({"message": "Senha alterada com sucesso"}), 200
+
+@reader_bp.route('/profile', methods=['DELETE'])
+@jwt_required()
+def delete_account():
+    current_id = int(get_jwt_identity())
+    user = User.query.get(current_id)
+    if not user:
+        return jsonify({"message": "Usuário não encontrado"}), 404
+        
+    # Limpeza de dados relacionados (opcional dependendo de ON DELETE CASCADE)
+    # Por segurança, vamos remover a imagem física
+    if user.imagem:
+        path = os.path.join(current_app.config["UPLOAD_FOLDER"], user.imagem)
+        if os.path.exists(path):
+            os.remove(path)
+            
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"message": "Conta removida permanentemente"}), 200

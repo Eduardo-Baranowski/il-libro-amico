@@ -8,6 +8,8 @@ class User(db.Model):
     senha_hash = db.Column(db.String(255), nullable=False)
     papel = db.Column(db.String(20), nullable=False) # 'admin', 'editor', 'leitor'
     imagem = db.Column(db.String(255), nullable=True)
+    headline = db.Column(db.String(255), nullable=True)
+    bio = db.Column(db.Text, nullable=True)
 
     def verificar_senha(self, senha_plana):
         return bcrypt.check_password_hash(self.senha_hash, senha_plana)

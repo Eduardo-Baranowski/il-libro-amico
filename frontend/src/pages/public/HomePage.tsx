@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 
 import { api } from '../../lib/api'
 import type { FeedItem } from '../../lib/types'
@@ -45,17 +46,21 @@ export function HomePage() {
               </div>
 
               <div className="row" style={{ marginTop: 10, alignItems: 'flex-start' }}>
-                {it.livro.imagem_url ? (
-                  <img
-                    src={it.livro.imagem_url}
-                    alt={it.livro.titulo}
-                    style={{ width: 72, height: 96, objectFit: 'cover', borderRadius: 10, border: '1px solid #e2e8f0' }}
-                  />
-                ) : (
-                  <div style={{ width: 72, height: 96, borderRadius: 10, border: '1px solid #e2e8f0', background: '#f1f5f9' }} />
-                )}
+                <Link to={`/livro/${it.livro.id}`} style={{ display: 'block', transition: 'transform 0.2s' }} className="hover-scale">
+                  {it.livro.imagem_url ? (
+                    <img
+                      src={it.livro.imagem_url}
+                      alt={it.livro.titulo}
+                      style={{ width: 72, height: 96, objectFit: 'cover', borderRadius: 10, border: '1px solid #e2e8f0' }}
+                    />
+                  ) : (
+                    <div style={{ width: 72, height: 96, borderRadius: 10, border: '1px solid #e2e8f0', background: '#f1f5f9' }} />
+                  )}
+                </Link>
                 <div style={{ flex: 1, minWidth: 220 }}>
-                  <strong>{it.livro.titulo}</strong>
+                  <Link to={`/livro/${it.livro.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <strong style={{ display: 'block' }} className="link-hover">{it.livro.titulo}</strong>
+                  </Link>
                   <div className="muted">{it.livro.autor}</div>
                   {it.comentario ? (
                     <p className="muted" style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>

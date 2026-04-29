@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router-dom'
 
 import './index.css'
 import { AuthProvider } from './app/AuthProvider'
+import { CartProvider } from './app/CartProvider'
 import { router } from './app/router'
 
 const queryClient = new QueryClient({
@@ -24,7 +25,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <RouterProvider router={router} />
+        <CartProvider>
+          <RouterProvider router={router} />
+        </CartProvider>
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,
