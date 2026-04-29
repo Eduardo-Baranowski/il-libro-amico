@@ -63,15 +63,28 @@ npm run dev
 
 ### Leitor / Público (`/reader`)
 - `GET /reader/editors`: Listar editoras (público).
+- `GET /reader/users/<id>`: Ver perfil público de usuário/editora.
+- `GET /reader/users/<id>/visit`: Dados completos para a página de visita pública.
+- `GET /reader/users/<id>/relation`: Estado social entre usuário logado e perfil.
+- `POST/DELETE /reader/users/<id>/follow`: Seguir / deixar de seguir.
+- `POST/DELETE /reader/users/<id>/connect`: Enviar/aceitar conexão e remover amizade.
+- `POST /reader/friendships/<id>/accept`: Aceitar solicitação de amizade.
+- `POST /reader/friendships/<id>/reject`: Recusar solicitação de amizade.
+- `GET /reader/notifications`: Notificações de amizade e mensagens não lidas.
+- `GET/POST /reader/users/<id>/messages`: Listar e enviar mensagens diretas.
 - `GET /reader/books`: Listagem de todos os livros.
+- `GET /reader/search?q=...`: Busca completa por livros, usuários e editoras.
 - `GET /reader/books/<id>`: Detalhes de um livro específico.
-- `POST /reader/requests`: Criar uma solicitação para uma editora (requer login).
+- `GET /reader/editors/<id>/books`: Listar livros de uma editora.
+- `POST /reader/requests`: Criar uma solicitação para uma editora informando `editor_id` + `livro_id` (requer login).
 - `GET /reader/requests`: Listar minhas solicitações (requer login).
+- `POST /reader/purchases`: Realizar compra de livro com baixa de estoque.
+- `GET /reader/purchases`: Listar minhas compras.
 
 ### Editora (`/editor`)
 - `GET /editor/books`: Listar livros da própria editora.
 - `POST /editor/books`: Cadastrar novo livro (com upload de imagem).
-- `PUT /editor/books/<id>`: Atualizar livro existente.
+- `PUT /editor/books/<id>`: Atualizar livro existente (incluindo estoque).
 - `DELETE /editor/books/<id>`: Remover livro.
 - `GET /editor/requests`: Listar solicitações recebidas.
 - `PUT /editor/requests/<id>/respond`: Responder a uma solicitação.

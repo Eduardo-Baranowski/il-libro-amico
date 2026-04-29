@@ -14,7 +14,7 @@ export function HomePage() {
       <div className="card" style={{ flex: 2, minWidth: 320 }}>
         <h1 style={{ margin: 0 }}>Feed</h1>
         <p className="muted" style={{ marginTop: 8 }}>
-          Leituras recentes (estilo rede social). Preço não aparece aqui.
+          Leituras recentes da comunidade.
         </p>
 
         {q.isLoading ? <p style={{ marginTop: 16 }}>Carregando…</p> : null}
@@ -70,12 +70,12 @@ export function HomePage() {
       </div>
 
       <div className="card card-accent" style={{ flex: 1, minWidth: 260 }}>
-        <h2 style={{ margin: 0 }}>Dicas</h2>
+        <h2 style={{ margin: 0 }}>Loja integrada</h2>
         <p style={{ marginTop: 8, opacity: 0.9 }}>
-          Cadastre leituras como leitor em “Nova solicitação” e (em breve) “Minhas leituras”.
+          O app continua social no feed, e as vendas agora ficam na guia <code>Livros</code>.
         </p>
         <p style={{ marginTop: 8, opacity: 0.9 }}>
-          Swagger: <code>/apidocs/</code>. Em dev: proxy <code>/api</code>.
+          Leitor compra com estoque em tempo real. Editor gerencia catálogo e estoque.
         </p>
       </div>
     </div>

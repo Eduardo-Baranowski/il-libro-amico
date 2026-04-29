@@ -4,6 +4,9 @@ import { Layout } from './ui/Layout'
 import { RequireAuth } from './ui/RequireAuth'
 
 import { HomePage } from '../pages/public/HomePage'
+import { StorePage } from '../pages/public/StorePage'
+import { BookDetailsPage } from '../pages/public/BookDetailsPage'
+import { PublicProfilePage } from '../pages/public/PublicProfilePage'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { RegisterPage } from '../pages/auth/RegisterPage'
 
@@ -23,6 +26,10 @@ export const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { path: '/', element: <HomePage /> },
+      { path: '/livros', element: <StorePage /> },
+      { path: '/livro/:bookId', element: <BookDetailsPage /> },
+      { path: '/perfil/:userId', element: <PublicProfilePage /> },
+      { path: '/editora/:userId', element: <PublicProfilePage /> },
       { path: '/entrar', element: <LoginPage /> },
       { path: '/cadastro', element: <RegisterPage /> },
 

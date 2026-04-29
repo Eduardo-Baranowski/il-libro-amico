@@ -8,6 +8,7 @@ function buildFormData(fields: {
   titulo?: string
   autor?: string
   preco?: string
+  estoque?: string
   descricao?: string
   imagem?: File | null
 }) {
@@ -15,6 +16,7 @@ function buildFormData(fields: {
   if (fields.titulo != null) fd.set('titulo', fields.titulo)
   if (fields.autor != null) fd.set('autor', fields.autor)
   if (fields.preco != null) fd.set('preco', fields.preco)
+  if (fields.estoque != null) fd.set('estoque', fields.estoque)
   if (fields.descricao != null) fd.set('descricao', fields.descricao)
   if (fields.imagem) fd.set('imagem', fields.imagem)
   return fd
@@ -27,8 +29,9 @@ export function EditorBooksPage() {
     queryFn: () => api<BookEditor[]>('/editor/books'),
   })
 
-  const [newBook, setNewBook] = useState({ titulo: '', autor: '', preco: '', descricao: '' })
+  const [newBook, setNewBook] = useState({ titulo: '', autor: '', preco: '', estoque: '0', descricao: '' })
   const [file, setFile] = useState<File | null>(null)
+  const [stockDraft, setStockDraft] = useState<Record<number, string>>({})
 
   const createM = useMutation({
     mutationFn: async () => {
@@ -39,8 +42,19 @@ export function EditorBooksPage() {
       })
     },
     onSuccess: async () => {
-      setNewBook({ titulo: '', autor: '', preco: '', descricao: '' })
+      setNewBook({ titulo: '', autor: '', preco: '', estoque: '0', descricao: '' })
       setFile(null)
+      await qc.invalidateQueries({ queryKey: ['editorBooks'] })
+    },
+  })
+
+  const updateStockM = useMutation({
+    mutationFn: ({ id, estoque }: { id: number; estoque: number }) => {
+      const fd = new FormData()
+      fd.set('estoque', String(estoque))
+      return api<{ message: string }>(`/editor/books/${id}`, { method: 'PUT', body: fd })
+    },
+    onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['editorBooks'] })
     },
   })
@@ -100,6 +114,22 @@ export function EditorBooksPage() {
                 </div>
                 <div className="row" style={{ alignItems: 'center' }}>
                   <span className="pill primary">R$ {b.preco}</span>
+                  <span className="pill">estoque {b.estoque}</span>
+                  <input
+                    className="input"
+                    style={{ width: 110 }}
+                    inputMode="numeric"
+                    value={stockDraft[b.id] ?? String(b.estoque)}
+                    onChange={(e) => setStockDraft((d) => ({ ...d, [b.id]: e.target.value }))}
+                  />
+                  <button
+                    className="btn secondary"
+                    type="button"
+                    onClick={() => updateStockM.mutate({ id: b.id, estoque: Number(stockDraft[b.id] ?? b.estoque) })}
+                    disabled={updateStockM.isPending}
+                  >
+                    Salvar estoque
+                  </button>
                   <button
                     className="btn secondary"
                     type="button"
@@ -137,6 +167,10 @@ export function EditorBooksPage() {
           <div>
             <label className="label">Preço</label>
             <input className="input" inputMode="decimal" value={newBook.preco} onChange={(e) => setNewBook({ ...newBook, preco: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">Estoque</label>
+            <input className="input" inputMode="numeric" value={newBook.estoque} onChange={(e) => setNewBook({ ...newBook, estoque: e.target.value })} />
           </div>
           <div>
             <label className="label">Descrição</label>

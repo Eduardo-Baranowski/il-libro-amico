@@ -3,10 +3,15 @@ from ..models.user import User
 from ..models.request import Request
 from ..models.livro import Livro
 from ..models.leitura import Leitura
+from ..models.compra import Compra
+from ..models.follow import Follow
+from ..models.friendship import Friendship
+from ..models.message import Message
 from .. import db
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from functools import wraps
 from ..utils import image_url
+from datetime import datetime, timezone
 
 reader_bp = Blueprint('reader', __name__)
 
@@ -32,6 +37,441 @@ def list_editors():
     rows = User.query.filter_by(papel="editor").order_by(User.nome).all()
     return jsonify([{"id": u.id, "nome": u.nome} for u in rows]), 200
 
+
+@reader_bp.route('/users/<int:user_id>', methods=['GET'])
+def get_public_user(user_id):
+    user = User.query.get_or_404(user_id)
+    return jsonify(
+        {
+            "id": user.id,
+            "nome": user.nome,
+            "papel": user.papel,
+            "imagem_url": image_url(user.imagem),
+        }
+    ), 200
+
+
+@reader_bp.route('/users/<int:user_id>/visit', methods=['GET'])
+def get_public_user_visit(user_id):
+    user = User.query.get_or_404(user_id)
+    is_editor = user.papel == "editor"
+
+    editor_books = (
+        Livro.query.filter_by(editor_id=user.id).order_by(Livro.data_cadastro.desc()).limit(4).all()
+        if is_editor
+        else []
+    )
+    reading_log = (
+        Leitura.query.filter_by(leitor_id=user.id).order_by(Leitura.criado_em.desc()).limit(5).all()
+        if user.papel == "leitor"
+        else []
+    )
+
+    total_publications = Livro.query.filter_by(editor_id=user.id).count() if is_editor else 0
+    total_readings = Leitura.query.filter_by(leitor_id=user.id).count()
+    total_requests = Request.query.filter_by(leitor_id=user.id).count()
+    total_purchases = Compra.query.filter_by(leitor_id=user.id).count()
+    followers_count = Follow.query.filter_by(following_id=user.id).count()
+    following_count = Follow.query.filter_by(follower_id=user.id).count()
+    friends_count = Friendship.query.filter(
+        Friendship.status == "accepted",
+        db.or_(Friendship.requester_id == user.id, Friendship.addressee_id == user.id),
+    ).count()
+
+    timeline_dates = []
+    first_book = Livro.query.filter_by(editor_id=user.id).order_by(Livro.data_cadastro.asc()).first() if is_editor else None
+    if first_book and first_book.data_cadastro:
+        timeline_dates.append(first_book.data_cadastro)
+    first_reading = Leitura.query.filter_by(leitor_id=user.id).order_by(Leitura.criado_em.asc()).first()
+    if first_reading and first_reading.criado_em:
+        timeline_dates.append(first_reading.criado_em)
+    first_request = Request.query.filter_by(leitor_id=user.id).order_by(Request.data_criacao.asc()).first()
+    if first_request and first_request.data_criacao:
+        timeline_dates.append(first_request.data_criacao)
+    first_purchase = Compra.query.filter_by(leitor_id=user.id).order_by(Compra.data_compra.asc()).first()
+    if first_purchase and first_purchase.data_compra:
+        timeline_dates.append(first_purchase.data_compra)
+
+    if timeline_dates:
+        now = datetime.now(timezone.utc)
+        oldest = min(timeline_dates)
+        if oldest.tzinfo is None:
+            oldest = oldest.replace(tzinfo=timezone.utc)
+        else:
+            oldest = oldest.astimezone(timezone.utc)
+        tenure_years = max(1, int((now - oldest).days / 365))
+    else:
+        tenure_years = 1
+
+    stats = {
+        "publications": total_publications,
+        "citations": total_readings + total_requests + total_purchases,
+        "tenure": f"{tenure_years}y",
+        "contributions": total_publications + total_readings + total_requests + total_purchases,
+        "followers": followers_count,
+        "following": following_count,
+        "friends": friends_count,
+    }
+
+    return jsonify(
+        {
+            "user": {
+                "id": user.id,
+                "nome": user.nome,
+                "papel": user.papel,
+                "imagem_url": image_url(user.imagem),
+                "headline": (
+                    "Senior Scholar of Linguistics & Semiotics"
+                    if is_editor
+                    else "Leitor e pesquisador da comunidade"
+                ),
+                "bio": (
+                    "Dedicated to bridging scholarly rigor with contemporary digital reading practices."
+                    if is_editor
+                    else "Active reader documenting insights, reviews and curated reading journeys."
+                ),
+            },
+            "stats": stats,
+            "featured": [
+                {
+                    "id": b.id,
+                    "titulo": b.titulo,
+                    "autor": b.autor,
+                    "imagem_url": image_url(b.imagem),
+                    "descricao": b.descricao,
+                    "data": b.data_cadastro.isoformat() if b.data_cadastro else None,
+                    "tipo": "publication",
+                }
+                for b in editor_books
+            ],
+            "reading_log": [
+                {
+                    "id": r.id,
+                    "titulo": r.livro.titulo,
+                    "autor": r.livro.autor,
+                    "status": r.status,
+                    "nota": r.nota,
+                    "criado_em": r.criado_em.isoformat() if r.criado_em else None,
+                }
+                for r in reading_log
+            ],
+            "specializations": (
+                ["Linguistics", "Semiotics", "Digital Philology", "Archive Curation"]
+                if is_editor
+                else ["Reading", "Reviews", "Community Curation"]
+            ),
+            "affiliations": (
+                [
+                    {"nome": "Institute of Semantic Research", "cargo": "Lead Investigator"},
+                    {"nome": "Digital Archive Council", "cargo": "Advisory Board Member"},
+                ]
+                if is_editor
+                else [{"nome": "Lumina Reader Circle", "cargo": "Active Member"}]
+            ),
+        }
+    ), 200
+
+
+@reader_bp.route('/users/<int:user_id>/relation', methods=['GET'])
+@jwt_required()
+def relation_status(user_id):
+    current_id = int(get_jwt_identity())
+    if current_id == user_id:
+        return jsonify({"following": False, "is_friend": False, "outgoing_pending": False, "incoming_pending": False}), 200
+
+    following = Follow.query.filter_by(follower_id=current_id, following_id=user_id).first() is not None
+    outgoing_pending = (
+        Friendship.query.filter_by(requester_id=current_id, addressee_id=user_id, status="pending").first() is not None
+    )
+    incoming_pending = (
+        Friendship.query.filter_by(requester_id=user_id, addressee_id=current_id, status="pending").first() is not None
+    )
+    is_friend = (
+        Friendship.query.filter(
+            Friendship.status == "accepted",
+            db.or_(
+                db.and_(Friendship.requester_id == current_id, Friendship.addressee_id == user_id),
+                db.and_(Friendship.requester_id == user_id, Friendship.addressee_id == current_id),
+            ),
+        ).first()
+        is not None
+    )
+    return jsonify(
+        {
+            "following": following,
+            "is_friend": is_friend,
+            "outgoing_pending": outgoing_pending,
+            "incoming_pending": incoming_pending,
+        }
+    ), 200
+
+
+@reader_bp.route('/users/<int:user_id>/follow', methods=['POST'])
+@jwt_required()
+def follow_user(user_id):
+    current_id = int(get_jwt_identity())
+    if current_id == user_id:
+        return jsonify({"message": "Operação inválida"}), 400
+    target = User.query.get(user_id)
+    if not target:
+        return jsonify({"message": "Usuário não encontrado"}), 404
+    exists = Follow.query.filter_by(follower_id=current_id, following_id=user_id).first()
+    if exists:
+        return jsonify({"message": "Você já segue este perfil"}), 200
+    db.session.add(Follow(follower_id=current_id, following_id=user_id))
+    db.session.commit()
+    return jsonify({"message": "Seguindo perfil"}), 201
+
+
+@reader_bp.route('/users/<int:user_id>/follow', methods=['DELETE'])
+@jwt_required()
+def unfollow_user(user_id):
+    current_id = int(get_jwt_identity())
+    row = Follow.query.filter_by(follower_id=current_id, following_id=user_id).first()
+    if not row:
+        return jsonify({"message": "Você não segue este perfil"}), 404
+    db.session.delete(row)
+    db.session.commit()
+    return jsonify({"message": "Você deixou de seguir"}), 200
+
+
+@reader_bp.route('/users/<int:user_id>/connect', methods=['POST'])
+@jwt_required()
+def connect_user(user_id):
+    current_id = int(get_jwt_identity())
+    if current_id == user_id:
+        return jsonify({"message": "Operação inválida"}), 400
+    target = User.query.get(user_id)
+    if not target:
+        return jsonify({"message": "Usuário não encontrado"}), 404
+
+    existing_friend = Friendship.query.filter(
+        Friendship.status == "accepted",
+        db.or_(
+            db.and_(Friendship.requester_id == current_id, Friendship.addressee_id == user_id),
+            db.and_(Friendship.requester_id == user_id, Friendship.addressee_id == current_id),
+        ),
+    ).first()
+    if existing_friend:
+        return jsonify({"message": "Conexão já existe"}), 200
+
+    incoming = Friendship.query.filter_by(requester_id=user_id, addressee_id=current_id, status="pending").first()
+    if incoming:
+        incoming.status = "accepted"
+        db.session.commit()
+        return jsonify({"message": "Conexão aceita"}), 200
+
+    outgoing = Friendship.query.filter_by(requester_id=current_id, addressee_id=user_id, status="pending").first()
+    if outgoing:
+        return jsonify({"message": "Convite já enviado"}), 200
+
+    db.session.add(Friendship(requester_id=current_id, addressee_id=user_id, status="pending"))
+    db.session.commit()
+    return jsonify({"message": "Convite de conexão enviado"}), 201
+
+
+@reader_bp.route('/users/<int:user_id>/connect', methods=['DELETE'])
+@jwt_required()
+def disconnect_user(user_id):
+    current_id = int(get_jwt_identity())
+    row = Friendship.query.filter(
+        db.or_(
+            db.and_(Friendship.requester_id == current_id, Friendship.addressee_id == user_id),
+            db.and_(Friendship.requester_id == user_id, Friendship.addressee_id == current_id),
+        )
+    ).first()
+    if not row:
+        return jsonify({"message": "Sem conexão ativa"}), 404
+    db.session.delete(row)
+    db.session.commit()
+    return jsonify({"message": "Conexão removida"}), 200
+
+
+@reader_bp.route('/friendships/<int:friendship_id>/accept', methods=['POST'])
+@jwt_required()
+def accept_friendship(friendship_id):
+    current_id = int(get_jwt_identity())
+    row = Friendship.query.filter_by(id=friendship_id, addressee_id=current_id, status="pending").first()
+    if not row:
+        return jsonify({"message": "Solicitação não encontrada"}), 404
+    row.status = "accepted"
+    db.session.commit()
+    return jsonify({"message": "Solicitação aceita"}), 200
+
+
+@reader_bp.route('/friendships/<int:friendship_id>/reject', methods=['POST'])
+@jwt_required()
+def reject_friendship(friendship_id):
+    current_id = int(get_jwt_identity())
+    row = Friendship.query.filter_by(id=friendship_id, addressee_id=current_id, status="pending").first()
+    if not row:
+        return jsonify({"message": "Solicitação não encontrada"}), 404
+    db.session.delete(row)
+    db.session.commit()
+    return jsonify({"message": "Solicitação recusada"}), 200
+
+
+@reader_bp.route('/notifications', methods=['GET'])
+@jwt_required()
+def notifications():
+    current_id = int(get_jwt_identity())
+    friend_requests = (
+        Friendship.query.filter_by(addressee_id=current_id, status="pending")
+        .order_by(Friendship.criado_em.desc())
+        .limit(20)
+        .all()
+    )
+    unread_rows = (
+        Message.query.filter_by(receiver_id=current_id, lida=False)
+        .order_by(Message.data_envio.desc())
+        .all()
+    )
+    unread_by_sender = {}
+    for msg in unread_rows:
+        key = msg.sender_id
+        if key not in unread_by_sender:
+            unread_by_sender[key] = {"count": 0, "latest": msg}
+        unread_by_sender[key]["count"] += 1
+
+    unread_messages = []
+    for sender_id, payload in unread_by_sender.items():
+        sender = User.query.get(sender_id)
+        if not sender:
+            continue
+        latest = payload["latest"]
+        unread_messages.append(
+            {
+                "sender_id": sender.id,
+                "sender_nome": sender.nome,
+                "sender_imagem_url": image_url(sender.imagem),
+                "count": payload["count"],
+                "latest_conteudo": latest.conteudo,
+                "latest_data_envio": latest.data_envio.isoformat() if latest.data_envio else None,
+            }
+        )
+
+    requester_ids = {fr.requester_id for fr in friend_requests}
+    requester_map = {u.id: u for u in User.query.filter(User.id.in_(requester_ids)).all()} if requester_ids else {}
+
+    return jsonify(
+        {
+            "friend_requests": [
+                {
+                    "id": fr.id,
+                    "requester_id": fr.requester_id,
+                    "requester_nome": (requester_map[fr.requester_id].nome if fr.requester_id in requester_map else f"#{fr.requester_id}"),
+                    "requester_imagem_url": (
+                        image_url(requester_map[fr.requester_id].imagem) if fr.requester_id in requester_map else None
+                    ),
+                    "criado_em": fr.criado_em.isoformat() if fr.criado_em else None,
+                }
+                for fr in friend_requests
+            ],
+            "unread_messages": unread_messages,
+            "counts": {
+                "friend_requests": len(friend_requests),
+                "unread_message_threads": len(unread_messages),
+                "unread_messages_total": len(unread_rows),
+            },
+        }
+    ), 200
+
+
+@reader_bp.route('/users/<int:user_id>/messages', methods=['GET'])
+@jwt_required()
+def list_messages_with_user(user_id):
+    current_id = int(get_jwt_identity())
+    _ = User.query.get_or_404(user_id)
+    try:
+        limit = int(request.args.get("limit", "80"))
+    except ValueError:
+        limit = 80
+    limit = max(10, min(200, limit))
+    try:
+        after_id = int(request.args.get("after_id", "0"))
+    except ValueError:
+        after_id = 0
+
+    rows = (
+        Message.query.filter(
+            db.or_(
+                db.and_(Message.sender_id == current_id, Message.receiver_id == user_id),
+                db.and_(Message.sender_id == user_id, Message.receiver_id == current_id),
+            )
+        )
+        .filter(Message.id > after_id)
+        .order_by(Message.data_envio.asc())
+        .limit(limit)
+        .all()
+    )
+    for m in rows:
+        if m.receiver_id == current_id and not m.lida:
+            m.lida = True
+    db.session.commit()
+    return jsonify(
+        [
+            {
+                "id": m.id,
+                "sender_id": m.sender_id,
+                "receiver_id": m.receiver_id,
+                "conteudo": m.conteudo,
+                "lida": m.lida,
+                "data_envio": m.data_envio.isoformat() if m.data_envio else None,
+            }
+            for m in rows
+        ]
+    ), 200
+
+
+@reader_bp.route('/users/<int:user_id>/messages', methods=['POST'])
+@jwt_required()
+def send_message_to_user(user_id):
+    current_id = int(get_jwt_identity())
+    if current_id == user_id:
+        return jsonify({"message": "Operação inválida"}), 400
+    _ = User.query.get_or_404(user_id)
+    data = request.get_json() or {}
+    conteudo = (data.get("conteudo") or "").strip()
+    if not conteudo:
+        return jsonify({"message": "conteudo é obrigatório"}), 400
+    msg = Message(sender_id=current_id, receiver_id=user_id, conteudo=conteudo)
+    db.session.add(msg)
+    db.session.commit()
+    return jsonify({"message": "Mensagem enviada", "id": msg.id}), 201
+
+
+@reader_bp.route('/editors/<int:editor_id>/books', methods=['GET'])
+def list_editor_books(editor_id):
+    """
+    Listar livros de uma editora (Público)
+    ---
+    tags:
+      - Público
+    responses:
+      200:
+        description: Lista de livros da editora
+      404:
+        description: Editora não encontrada
+    """
+    editor = User.query.filter_by(id=editor_id, papel='editor').first()
+    if not editor:
+        return jsonify({"message": "Editora não encontrada"}), 404
+
+    books = Livro.query.filter_by(editor_id=editor_id).order_by(Livro.titulo.asc()).all()
+    return jsonify(
+        [
+            {
+                "id": b.id,
+                "titulo": b.titulo,
+                "autor": b.autor,
+                "preco": str(b.preco),
+                "estoque": b.estoque,
+                "imagem_url": image_url(b.imagem),
+            }
+            for b in books
+        ]
+    ), 200
+
 @reader_bp.route('/books', methods=['GET'])
 def list_all_books():
     """
@@ -50,12 +490,109 @@ def list_all_books():
             "titulo": b.titulo,
             "autor": b.autor,
             "preco": str(b.preco),
+            "estoque": b.estoque,
+            "editor_id": b.editor_id,
+            "status_estoque": (
+                "esgotado"
+                if b.estoque <= 0
+                else "baixo"
+                if b.estoque <= 3
+                else "disponivel"
+            ),
             "descricao": b.descricao,
             "imagem": b.imagem,
             "imagem_url": image_url(b.imagem),
             "editora": b.editor.nome
         } for b in books
     ]), 200
+
+
+@reader_bp.route('/search', methods=['GET'])
+def search():
+    """
+    Busca global por livros, usuários e editoras (Público)
+    ---
+    tags:
+      - Público
+    responses:
+      200:
+        description: Resultado da busca global
+    """
+    q = (request.args.get("q") or "").strip()
+    try:
+        limit = int(request.args.get("limit", "8"))
+    except ValueError:
+        limit = 8
+    limit = max(1, min(25, limit))
+
+    if not q:
+        return jsonify({"books": [], "users": [], "editors": []}), 200
+
+    like = f"%{q}%"
+    books = (
+        Livro.query.join(User, Livro.editor_id == User.id)
+        .filter(
+            db.or_(
+                Livro.titulo.ilike(like),
+                Livro.autor.ilike(like),
+                Livro.descricao.ilike(like),
+                User.nome.ilike(like),
+            )
+        )
+        .order_by(Livro.titulo.asc())
+        .limit(limit)
+        .all()
+    )
+    users = (
+        User.query.filter(User.nome.ilike(like))
+        .order_by(User.nome.asc())
+        .limit(limit)
+        .all()
+    )
+    editors = (
+        User.query.filter(User.papel == "editor", User.nome.ilike(like))
+        .order_by(User.nome.asc())
+        .limit(limit)
+        .all()
+    )
+
+    return jsonify(
+        {
+            "books": [
+                {
+                    "id": b.id,
+                    "titulo": b.titulo,
+                    "autor": b.autor,
+                    "preco": str(b.preco),
+                    "estoque": b.estoque,
+                    "editor_id": b.editor_id,
+                    "status_estoque": (
+                        "esgotado" if b.estoque <= 0 else "baixo" if b.estoque <= 3 else "disponivel"
+                    ),
+                    "imagem_url": image_url(b.imagem),
+                    "editora": b.editor.nome,
+                }
+                for b in books
+            ],
+            "users": [
+                {
+                    "id": u.id,
+                    "nome": u.nome,
+                    "papel": u.papel,
+                    "imagem_url": image_url(u.imagem),
+                }
+                for u in users
+            ],
+            "editors": [
+                {
+                    "id": e.id,
+                    "nome": e.nome,
+                    "imagem_url": image_url(e.imagem),
+                }
+                for e in editors
+            ],
+        }
+    ), 200
 
 @reader_bp.route('/books/<int:id>', methods=['GET'])
 def get_book_details(id):
@@ -76,6 +613,15 @@ def get_book_details(id):
         "titulo": b.titulo,
         "autor": b.autor,
         "preco": str(b.preco),
+        "estoque": b.estoque,
+        "editor_id": b.editor_id,
+        "status_estoque": (
+            "esgotado"
+            if b.estoque <= 0
+            else "baixo"
+            if b.estoque <= 3
+            else "disponivel"
+        ),
         "descricao": b.descricao,
         "imagem": b.imagem,
         "imagem_url": image_url(b.imagem),
@@ -273,19 +819,29 @@ def create_request():
     leitor_id = int(get_jwt_identity())
     data = request.get_json() or {}
     editor_id = data.get('editor_id')
+    livro_id = data.get('livro_id')
     conteudo = data.get('conteudo')
 
-    if editor_id is None or not conteudo or not str(conteudo).strip():
-        return jsonify({"message": "editor_id e conteudo são obrigatórios"}), 400
+    if editor_id is None or livro_id is None:
+        return jsonify({"message": "editor_id e livro_id são obrigatórios"}), 400
 
     editor = User.query.filter_by(id=editor_id, papel='editor').first()
     if not editor:
         return jsonify({"message": "Editora não encontrada"}), 404
 
+    livro = Livro.query.filter_by(id=livro_id, editor_id=editor_id).first()
+    if not livro:
+        return jsonify({"message": "Livro não encontrado para esta editora"}), 404
+
+    msg = (str(conteudo).strip() if conteudo is not None else "")
+    if not msg:
+        msg = f"Tenho interesse no livro '{livro.titulo}'."
+
     nova_solicitacao = Request(
         leitor_id=leitor_id,
         editor_id=editor_id,
-        conteudo=conteudo,
+        livro_id=livro_id,
+        conteudo=msg,
         status='pendente'
     )
 
@@ -293,6 +849,81 @@ def create_request():
     db.session.commit()
 
     return jsonify({"message": "Solicitação enviada", "id": nova_solicitacao.id}), 201
+
+
+@reader_bp.route("/purchases", methods=["POST"])
+@jwt_required()
+@verificar_leitor
+def create_purchase():
+    """
+    Comprar livro (Apenas Leitor)
+    ---
+    tags:
+      - Leitor
+    security:
+      - Bearer: []
+    responses:
+      201:
+        description: Compra registrada
+    """
+    leitor_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    livro_id = data.get("livro_id")
+    quantidade = data.get("quantidade", 1)
+
+    try:
+        quantidade = int(quantidade)
+    except (TypeError, ValueError):
+        return jsonify({"message": "quantidade inválida"}), 400
+    if quantidade <= 0:
+        return jsonify({"message": "quantidade deve ser maior que zero"}), 400
+
+    livro = Livro.query.get(livro_id)
+    if not livro:
+        return jsonify({"message": "Livro não encontrado"}), 404
+    if livro.estoque < quantidade:
+        return jsonify({"message": "Estoque insuficiente"}), 400
+
+    livro.estoque -= quantidade
+    total = livro.preco * quantidade
+    compra = Compra(
+        leitor_id=leitor_id,
+        livro_id=livro.id,
+        quantidade=quantidade,
+        total=total,
+        status="confirmada",
+    )
+    db.session.add(compra)
+    db.session.commit()
+
+    return jsonify({"message": "Compra realizada com sucesso", "id": compra.id}), 201
+
+
+@reader_bp.route("/purchases", methods=["GET"])
+@jwt_required()
+@verificar_leitor
+def list_my_purchases():
+    leitor_id = int(get_jwt_identity())
+    rows = Compra.query.filter_by(leitor_id=leitor_id).order_by(Compra.data_compra.desc()).all()
+    return jsonify(
+        [
+            {
+                "id": c.id,
+                "quantidade": c.quantidade,
+                "total": str(c.total),
+                "status": c.status,
+                "data_compra": c.data_compra.isoformat() if c.data_compra else None,
+                "livro": {
+                    "id": c.livro.id,
+                    "titulo": c.livro.titulo,
+                    "autor": c.livro.autor,
+                    "imagem_url": image_url(c.livro.imagem),
+                    "editora": c.livro.editor.nome,
+                },
+            }
+            for c in rows
+        ]
+    ), 200
 
 @reader_bp.route('/requests', methods=['GET'])
 @jwt_required()
@@ -319,6 +950,11 @@ def get_my_requests():
         resultado.append({
             "id": s.id,
             "editor_id": s.editor_id,
+            "editor_nome": s.editor.nome if s.editor else None,
+            "livro_id": s.livro_id,
+            "livro_titulo": s.livro.titulo if s.livro else None,
+            "livro_autor": s.livro.autor if s.livro else None,
+            "livro_imagem_url": image_url(s.livro.imagem) if s.livro else None,
             "conteudo": s.conteudo,
             "resposta": s.resposta,
             "status": s.status,

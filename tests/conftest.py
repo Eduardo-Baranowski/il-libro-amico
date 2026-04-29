@@ -129,10 +129,11 @@ def editor_book(app_ctx, editor_user):
 
 
 @pytest.fixture
-def reader_request(app_ctx, reader_user, editor_user):
+def reader_request(app_ctx, reader_user, editor_user, editor_book):
     req = Request(
         leitor_id=reader_user.id,
         editor_id=editor_user.id,
+        livro_id=editor_book.id,
         conteudo="Solicitacao inicial",
         status="pendente",
     )

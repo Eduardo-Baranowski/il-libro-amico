@@ -85,6 +85,10 @@ def create_app():
     from .models.livro import Livro  # noqa: F401
     from .models.request import Request  # noqa: F401
     from .models.leitura import Leitura  # noqa: F401
+    from .models.compra import Compra  # noqa: F401
+    from .models.follow import Follow  # noqa: F401
+    from .models.friendship import Friendship  # noqa: F401
+    from .models.message import Message  # noqa: F401
 
     @app.errorhandler(403)
     def _forbidden(_e):

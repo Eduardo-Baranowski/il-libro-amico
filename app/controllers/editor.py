@@ -62,6 +62,9 @@ def list_editor_requests():
             {
                 "id": r.id,
                 "leitor_id": r.leitor_id,
+                "livro_id": r.livro_id,
+                "livro_titulo": r.livro.titulo if r.livro else None,
+                "livro_autor": r.livro.autor if r.livro else None,
                 "conteudo": r.conteudo,
                 "resposta": r.resposta,
                 "status": r.status,
@@ -150,6 +153,7 @@ def list_books():
             "titulo": b.titulo,
             "autor": b.autor,
             "preco": str(b.preco),
+            "estoque": b.estoque,
             "descricao": b.descricao,
             "imagem": b.imagem,
             "imagem_url": image_url(b.imagem),
@@ -197,9 +201,17 @@ def create_book():
     titulo = request.form.get("titulo")
     autor = request.form.get("autor")
     preco = _parse_preco(request.form.get("preco"))
+    estoque_raw = request.form.get("estoque")
     descricao = request.form.get("descricao")
-    
-    if not titulo or not autor or not preco:
+
+    try:
+        estoque = int(estoque_raw if estoque_raw is not None else 0)
+    except (TypeError, ValueError):
+        return jsonify({"message": "estoque inválido"}), 400
+    if estoque < 0:
+        return jsonify({"message": "estoque deve ser maior ou igual a zero"}), 400
+
+    if not titulo or not autor or preco is None:
         return jsonify({"message": "Título, autor e preço válido são obrigatórios"}), 400
 
     imagem_path = None
@@ -211,6 +223,7 @@ def create_book():
         titulo=titulo,
         autor=autor,
         preco=preco,
+        estoque=estoque,
         descricao=descricao,
         imagem=imagem_path
     )
@@ -281,6 +294,14 @@ def update_book(id):
         livro.preco = preco
     if "descricao" in request.form:
         livro.descricao = request.form.get("descricao")
+    if "estoque" in request.form:
+        try:
+            estoque = int(request.form.get("estoque"))
+        except (TypeError, ValueError):
+            return jsonify({"message": "estoque inválido"}), 400
+        if estoque < 0:
+            return jsonify({"message": "estoque deve ser maior ou igual a zero"}), 400
+        livro.estoque = estoque
         
     if "imagem" in request.files:
         # Remover imagem antiga se existir

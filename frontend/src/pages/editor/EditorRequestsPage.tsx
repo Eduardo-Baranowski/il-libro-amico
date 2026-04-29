@@ -45,6 +45,14 @@ export function EditorRequestsPage() {
             </div>
 
             <div style={{ marginTop: 10 }}>
+              <div className="muted">Livro</div>
+              <div>
+                <strong>{r.livro_titulo ?? 'Livro não informado'}</strong>
+                {r.livro_autor ? <span className="muted"> — {r.livro_autor}</span> : null}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 10 }}>
               <div className="muted">Mensagem</div>
               <div style={{ whiteSpace: 'pre-wrap' }}>{r.conteudo}</div>
             </div>
