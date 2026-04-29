@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { useAuth } from '../../app/AuthProvider'
 import { getUserIdFromToken } from '../../lib/token'
 
 interface Conversation {
@@ -70,77 +69,69 @@ export function ChatPage() {
     sendMsgM.mutate(msgInput)
   }
 
+  // Active user data for the header
+  const activeUser = conversationsQ.data?.find(c => String(c.user_id) === String(activeUserId))
+
   return (
-    <div className="container" style={{ height: 'calc(100vh - 120px)', display: 'flex', gap: '20px', padding: '20px 0' }}>
+    <div className={`chat-shell ${activeUserId ? 'has-active-chat' : ''}`}>
       {/* Sidebar - Conversas */}
-      <aside className="settings-card" style={{ width: '320px', display: 'flex', flexDirection: 'column', padding: '0' }}>
-        <div style={{ padding: '20px', borderBottom: '1px solid var(--border)' }}>
-          <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Mensagens</h2>
+      <aside className="chat-sidebar card">
+        <div className="chat-sidebar-header">
+          <h2>Mensagens</h2>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="chat-sidebar-list">
           {conversationsQ.data?.map(conv => (
             <div 
               key={conv.user_id} 
-              className={`dropdown-item ${activeUserId === String(conv.user_id) ? 'active' : ''}`}
-              style={{ 
-                padding: '16px', 
-                cursor: 'pointer', 
-                display: 'flex', 
-                gap: '12px', 
-                alignItems: 'center',
-                borderBottom: '1px solid var(--border)',
-                background: activeUserId === String(conv.user_id) ? 'var(--surface-2)' : 'transparent'
-              }}
+              className={`chat-contact-item ${activeUserId === String(conv.user_id) ? 'active' : ''}`}
               onClick={() => navigate(`/mensagens/${conv.user_id}`)}
             >
-              <div className="avatar-circle" style={{ width: '48px', height: '48px', flexShrink: 0 }}>
+              <div className="avatar-circle chat-avatar">
                 {conv.user_imagem_url ? <img src={conv.user_imagem_url} alt={conv.user_nome} /> : <span>{conv.user_nome.slice(0,1).toUpperCase()}</span>}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: '14px', display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.user_nome}</span>
-                  {conv.unread_count > 0 && <span className="pill success" style={{ padding: '2px 6px', fontSize: '10px' }}>{conv.unread_count}</span>}
+              <div className="chat-contact-info">
+                <div className="chat-contact-top">
+                  <span className="chat-contact-name">{conv.user_nome}</span>
+                  {conv.unread_count > 0 && <span className="pill success mini-pill">{conv.unread_count}</span>}
                 </div>
-                <div className="muted" style={{ fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div className="chat-contact-msg muted">
                   {conv.last_message}
                 </div>
               </div>
             </div>
           ))}
           {conversationsQ.data?.length === 0 && (
-            <p className="muted" style={{ padding: '40px', textAlign: 'center' }}>Nenhuma conversa iniciada.</p>
+            <p className="muted empty-msg">Nenhuma conversa iniciada.</p>
           )}
         </div>
       </aside>
 
       {/* Main Chat Area */}
-      <main className="settings-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0', position: 'relative' }}>
+      <main className="chat-main card">
         {activeUserId ? (
           <>
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div className="avatar-circle" style={{ width: '32px', height: '32px' }}>
-                 <span>💬</span>
+            <div className="chat-header">
+              <button className="btn secondary chat-back-btn" onClick={() => navigate('/mensagens')}>
+                ⬅️
+              </button>
+              <div className="avatar-circle chat-header-avatar">
+                 {activeUser?.user_imagem_url ? <img src={activeUser.user_imagem_url} alt={activeUser.user_nome} /> : <span>💬</span>}
               </div>
-              <strong style={{ fontSize: '1.1rem' }}>Conversa</strong>
+              <div className="chat-header-info">
+                <strong>{activeUser?.user_nome || 'Conversa'}</strong>
+                <Link to={`/perfil/${activeUserId}`} className="link-hover muted" style={{ fontSize: '11px' }}>Ver perfil</Link>
+              </div>
             </div>
 
-            <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div ref={scrollRef} className="chat-messages">
               {messagesQ.data?.map(m => {
                 const isMe = String(m.sender_id) === String(meId)
                 return (
-                  <div key={m.id} style={{ 
-                    alignSelf: isMe ? 'flex-end' : 'flex-start',
-                    maxWidth: '70%',
-                    padding: '12px 16px',
-                    borderRadius: isMe ? '18px 18px 0 18px' : '18px 18px 18px 0',
-                    background: isMe ? 'var(--primary)' : 'var(--surface-2)',
-                    color: isMe ? '#fff' : 'inherit',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                    fontSize: '14px',
-                    lineHeight: '1.4'
-                  }}>
-                    {m.conteudo}
-                    <div style={{ fontSize: '10px', opacity: 0.6, marginTop: '4px', textAlign: 'right' }}>
+                  <div key={m.id} className={`chat-bubble ${isMe ? 'outgoing' : 'incoming'}`}>
+                    <div className="chat-bubble-content">
+                      {m.conteudo}
+                    </div>
+                    <div className="chat-bubble-time">
                       {new Date(m.data_envio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
@@ -148,13 +139,12 @@ export function ChatPage() {
               })}
             </div>
 
-            <form onSubmit={handleSend} style={{ padding: '20px', borderTop: '1px solid var(--border)', display: 'flex', gap: '12px' }}>
+            <form onSubmit={handleSend} className="chat-input-area">
               <input 
                 className="input" 
                 placeholder="Escreva uma mensagem..." 
                 value={msgInput}
                 onChange={e => setMsgInput(e.target.value)}
-                style={{ borderRadius: '24px', paddingLeft: '20px' }}
               />
               <button className="btn" type="submit" disabled={!msgInput.trim() || sendMsgM.isPending}>
                 {sendMsgM.isPending ? '...' : 'Enviar'}
@@ -162,8 +152,8 @@ export function ChatPage() {
             </form>
           </>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px' }}>
-             <div style={{ fontSize: '64px' }}>💬</div>
+          <div className="chat-empty-state">
+             <div className="chat-empty-icon">💬</div>
              <h3>Suas Mensagens</h3>
              <p className="muted">Selecione uma conversa para começar.</p>
           </div>

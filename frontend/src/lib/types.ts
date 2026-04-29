@@ -1,6 +1,11 @@
 import type { Role } from './token'
 
-export type LoginResponse = { token_sessao: string; papel: Role }
+export type LoginResponse = { 
+  token_sessao: string; 
+  papel: Role;
+  nome: string;
+  imagem_url: string | null;
+}
 
 export type User = { id: number; nome: string; email: string; papel: Role }
 
@@ -122,10 +127,12 @@ export type VisitProfile = {
   }>
   reading_log: Array<{
     id: number
+    livro_id: number
     titulo: string
     autor: string
     status: string
     nota: number | null
+    imagem_url: string | null
     criado_em: string | null
   }>
   specializations: string[]

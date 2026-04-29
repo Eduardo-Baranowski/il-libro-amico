@@ -18,12 +18,12 @@ export function HomePage() {
   })
 
   return (
-    <div className="row" style={{ alignItems: 'flex-start' }}>
-      <div className="card" style={{ flex: 2, minWidth: 320 }}>
-        <h1 style={{ margin: 0 }}>Feed</h1>
-        <p className="muted" style={{ marginTop: 8 }}>
-          Leituras recentes da comunidade.
-        </p>
+    <div className="feed-container">
+      <div className="feed-main-card card">
+        <div className="feed-header">
+          <h1 style={{ margin: 0 }}>Feed</h1>
+          <p className="muted">Leituras recentes da comunidade.</p>
+        </div>
 
         {q.isLoading ? <p style={{ marginTop: 16 }}>Carregando…</p> : null}
         {q.isError ? (
@@ -38,62 +38,63 @@ export function HomePage() {
           </p>
         ) : null}
 
-        <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
+        <div className="feed-list">
           {q.data?.map((it) => (
-            <div key={it.id} className="card" style={{ borderRadius: 10, padding: 12 }}>
-              <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-                <div className="row" style={{ alignItems: 'center' }}>
+            <article key={it.id} className="feed-item card">
+              <div className="feed-item-top">
+                <div className="feed-item-user">
                   <span className="pill primary">{it.leitor.nome}</span>
                   <span className="pill">{statusLabels[it.status] || it.status}</span>
-                  {it.nota ? (
-                    <div style={{ marginLeft: '8px' }}>
-                      <StarRating rating={it.nota} size={16} />
-                    </div>
-                  ) : null}
                 </div>
-                <div className="muted">
+                <div className="feed-item-date muted">
                   {it.criado_em ? new Date(it.criado_em).toLocaleString() : ''}
                 </div>
               </div>
 
-              <div className="row" style={{ marginTop: 10, alignItems: 'flex-start' }}>
-                <Link to={`/livro/${it.livro.id}`} style={{ display: 'block', transition: 'transform 0.2s' }} className="hover-scale">
-                  {it.livro.imagem_url ? (
-                    <img
-                      src={it.livro.imagem_url}
-                      alt={it.livro.titulo}
-                      style={{ width: 120, height: 160, objectFit: 'cover', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    />
-                  ) : (
-                    <div style={{ width: 120, height: 160, borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>📖</div>
-                  )}
-                </Link>
-                <div style={{ flex: 1, minWidth: 220 }}>
-                  <Link to={`/livro/${it.livro.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <strong style={{ display: 'block' }} className="link-hover">{it.livro.titulo}</strong>
+              <div className="feed-item-content">
+                <div className="feed-item-media">
+                  <Link to={`/livro/${it.livro.id}`} className="hover-scale">
+                    {it.livro.imagem_url ? (
+                      <img src={it.livro.imagem_url} alt={it.livro.titulo} className="feed-book-cover" />
+                    ) : (
+                      <div className="feed-book-placeholder">📖</div>
+                    )}
+                  </Link>
+                  {it.nota ? (
+                    <div className="feed-item-rating">
+                      <StarRating rating={it.nota} size={20} />
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="feed-item-info">
+                  <Link to={`/livro/${it.livro.id}`} className="feed-book-title-link">
+                    <strong className="link-hover">{it.livro.titulo}</strong>
                   </Link>
                   <div className="muted">{it.livro.autor}</div>
                   {it.comentario ? (
-                    <p className="muted" style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>
+                    <p className="feed-item-comment">
                       {it.comentario}
                     </p>
                   ) : null}
                 </div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       </div>
 
-      <div className="card card-accent" style={{ flex: 1, minWidth: 260 }}>
+      <aside className="feed-sidebar card card-accent">
         <h2 style={{ margin: 0 }}>Loja integrada</h2>
-        <p style={{ marginTop: 8, opacity: 0.9 }}>
-          O app continua social no feed, e as vendas agora ficam na guia <code>Livros</code>.
-        </p>
-        <p style={{ marginTop: 8, opacity: 0.9 }}>
-          Leitor compra com estoque em tempo real. Editor gerencia catálogo e estoque.
-        </p>
-      </div>
+        <div className="stack" style={{ marginTop: 12 }}>
+          <p style={{ opacity: 0.9 }}>
+            O app continua social no feed, e as vendas agora ficam na guia <code>Livros</code>.
+          </p>
+          <p style={{ opacity: 0.9 }}>
+            Leitor compra com estoque em tempo real. Editor gerencia catálogo e estoque.
+          </p>
+        </div>
+      </aside>
     </div>
   )
 }

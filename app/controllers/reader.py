@@ -142,26 +142,28 @@ def get_public_user_visit(user_id):
             "reading_log": [
                 {
                     "id": r.id,
+                    "livro_id": r.livro_id,
                     "titulo": r.livro.titulo,
                     "autor": r.livro.autor,
                     "status": r.status,
                     "nota": r.nota,
+                    "imagem_url": image_url(r.livro.imagem),
                     "criado_em": r.criado_em.isoformat() if r.criado_em else None,
                 }
                 for r in reading_log
             ],
             "specializations": (
-                ["Linguistics", "Semiotics", "Digital Philology", "Archive Curation"]
+                ["Linguística", "Semiótica", "Filologia Digital", "Curadoria de Arquivos"]
                 if is_editor
-                else ["Reading", "Reviews", "Community Curation"]
+                else ["Leitura", "Resenhas", "Curadoria Comunitária"]
             ),
             "affiliations": (
                 [
-                    {"nome": "Institute of Semantic Research", "cargo": "Lead Investigator"},
-                    {"nome": "Digital Archive Council", "cargo": "Advisory Board Member"},
+                    {"nome": "Instituto de Pesquisa Semântica", "cargo": "Investigador Líder"},
+                    {"nome": "Conselho de Arquivos Digitais", "cargo": "Membro do Conselho Consultivo"},
                 ]
                 if is_editor
-                else [{"nome": "Lumina Reader Circle", "cargo": "Active Member"}]
+                else [{"nome": "Círculo de Leitores Lumina", "cargo": "Membro Ativo"}]
             ),
         }
     ), 200
@@ -794,6 +796,47 @@ def delete_reading(reading_id):
     
     return jsonify({"message": "Leitura removida com sucesso"}), 200
 
+
+from sqlalchemy import func
+
+@reader_bp.route('/recommendations', methods=['GET'])
+def get_recommendations():
+    """
+    Obter recomendações de livros baseadas em avaliações (Público)
+    """
+    # Buscar livros com as melhores médias de nota
+    top_books = db.session.query(
+        Livro, 
+        func.avg(Leitura.nota).label('average_rating')
+    ).join(Leitura, Livro.id == Leitura.livro_id) \
+     .filter(Leitura.nota.isnot(None)) \
+     .group_by(Livro.id) \
+     .order_by(db.desc('average_rating')) \
+     .limit(6) \
+     .all()
+
+    if not top_books:
+        # Se não houver avaliações, retorna livros recentes
+        books = Livro.query.order_by(Livro.data_cadastro.desc()).limit(6).all()
+        return jsonify([
+            {
+                "id": b.id,
+                "titulo": b.titulo,
+                "autor": b.autor,
+                "imagem_url": image_url(b.imagem),
+                "average_rating": 0.0
+            } for b in books
+        ]), 200
+
+    return jsonify([
+        {
+            "id": b.Livro.id,
+            "titulo": b.Livro.titulo,
+            "autor": b.Livro.autor,
+            "imagem_url": image_url(b.Livro.imagem),
+            "average_rating": float(round(b.average_rating, 1))
+        } for b in top_books
+    ]), 200
 
 @reader_bp.route("/feed", methods=["GET"])
 def feed():

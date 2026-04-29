@@ -63,14 +63,16 @@ export function Layout() {
           <div className="nav">
             <Link to="/" className="brand">
               <span style={{ fontSize: '24px' }}>📚</span>
-              Lumina Library
+              <span className="brand-text">Lumina Library</span>
             </Link>
-            <Link className="nav-link" to="/">
-              Início
-            </Link>
-            <Link className="nav-link" to="/livros">
-              Livros
-            </Link>
+            <div className="nav-links-desktop">
+              <Link className="nav-link" to="/">
+                Início
+              </Link>
+              <Link className="nav-link" to="/livros">
+                Livros
+              </Link>
+            </div>
           </div>
 
           <div className="nav">
@@ -97,7 +99,7 @@ export function Layout() {
                     onClick={() => setOpenNotifications((v) => !v)}
                   >
                     🔔 {notifCount > 0 && <span style={{ background: 'var(--error)', color: '#fff', borderRadius: '99px', padding: '0 5px', fontSize: '10px' }}>{notifCount}</span>}
-                    <span style={{ fontSize: '14px' }}>Notificações</span>
+                    <span className="nav-text-mobile">Notificações</span>
                   </button>
 
                   {openNotifications ? (
@@ -161,16 +163,35 @@ export function Layout() {
                 <div className="dropdown" ref={userMenuRef}>
                   <div className="user-badge" onClick={() => setOpenUserMenu((v) => !v)}>
                     <div className="user-avatar-sm">
-                      <span>{auth.role?.slice(0, 1).toUpperCase()}</span>
+                      {auth.imagem_url ? (
+                        <img src={auth.imagem_url} alt={auth.nome || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span>{auth.nome?.slice(0, 1).toUpperCase() || auth.role?.slice(0, 1).toUpperCase()}</span>
+                      )}
                     </div>
-                    <span style={{ fontSize: '14px', fontWeight: 600, textTransform: 'capitalize' }}>
-                      {auth.role === 'admin' ? 'Administrador' : auth.role === 'leitor' ? 'Leitor' : 'Editor'}
-                    </span>
+                    <div className="nav-text-mobile user-info-box">
+                      <span style={{ fontSize: '13px', fontWeight: 700 }}>
+                        {auth.nome || 'Usuário'}
+                      </span>
+                      <span style={{ fontSize: '10px', opacity: 0.6, textTransform: 'capitalize' }}>
+                        {auth.role === 'admin' ? 'Administrador' : auth.role === 'leitor' ? 'Leitor' : 'Editor'}
+                      </span>
+                    </div>
                     <span style={{ fontSize: '10px', opacity: 0.5 }}>▼</span>
                   </div>
 
                   {openUserMenu && (
                     <div className="dropdown-menu" onMouseLeave={() => setOpenUserMenu(false)}>
+                      <div className="nav-only-mobile">
+                        <Link className="dropdown-item" to="/" onClick={() => setOpenUserMenu(false)}>
+                          🏠 Início
+                        </Link>
+                        <Link className="dropdown-item" to="/livros" onClick={() => setOpenUserMenu(false)}>
+                          📚 Livros Catálogo
+                        </Link>
+                        <div className="dropdown-divider" />
+                      </div>
+
                       <div className="dropdown-header">
                         <div style={{ fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                           Acesso: {auth.role === 'admin' ? 'Administrador' : auth.role === 'leitor' ? 'Leitor' : 'Editor'}

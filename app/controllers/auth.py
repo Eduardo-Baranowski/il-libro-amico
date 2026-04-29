@@ -90,11 +90,17 @@ def login():
     usuario = User.query.filter_by(email=email).first()
     
     if usuario and usuario.verificar_senha(senha):
+        from ..utils import image_url
         # PyJWT exige que "sub" (identity) seja string; papel vai em additional_claims.
         token_sessao = create_access_token(
             identity=str(usuario.id),
             additional_claims={"papel": usuario.papel},
         )
-        return jsonify({"token_sessao": token_sessao, "papel": usuario.papel}), 200
+        return jsonify({
+            "token_sessao": token_sessao, 
+            "papel": usuario.papel,
+            "nome": usuario.nome,
+            "imagem_url": image_url(usuario.imagem)
+        }), 200
     
     return jsonify({"message": "Credenciais inválidas"}), 401

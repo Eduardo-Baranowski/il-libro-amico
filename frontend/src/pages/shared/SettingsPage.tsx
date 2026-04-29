@@ -126,7 +126,7 @@ export function SettingsPage() {
             </div>
             
             <form onSubmit={handleSave} className="stack">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'end' }}>
+              <div className="responsive-form-grid">
                 <div>
                   <label className="label">Nome Completo</label>
                   <input className="input" defaultValue={profile?.user.nome} onChange={e => setNome(e.target.value)} placeholder="Seu nome" />
@@ -173,7 +173,7 @@ export function SettingsPage() {
                   </div>
                 </div>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="responsive-form-grid" style={{ gap: '16px' }}>
                    <input className="input" type="password" placeholder="Senha Atual" value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} />
                    <input className="input" type="password" placeholder="Nova Senha" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} />
                 </div>

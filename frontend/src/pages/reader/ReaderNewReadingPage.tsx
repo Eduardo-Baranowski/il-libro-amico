@@ -55,8 +55,9 @@ export function ReaderNewReadingPage() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['myReadings'] })
       await qc.invalidateQueries({ queryKey: ['bookDetails', bookId] })
+      await qc.invalidateQueries({ queryKey: ['publicVisit'] }) // Invalida visitas para atualizar perfil
       toast.success(editBookId ? 'Leitura atualizada!' : 'Leitura registrada!')
-      navigate('/leitor/leituras')
+      navigate(-1)
     },
     onError: (err: any) => toast.error(err.message || 'Erro ao salvar')
   })

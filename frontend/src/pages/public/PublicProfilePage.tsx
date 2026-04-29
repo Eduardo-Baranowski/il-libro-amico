@@ -1,11 +1,13 @@
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
 import type { DirectMessage, RelationStatus, VisitProfile } from '../../lib/types'
 import { useAuth } from '../../app/AuthProvider'
 import { getUserIdFromToken } from '../../lib/token'
+import { ConfirmModal } from '../../app/components/ConfirmModal'
 
 export function PublicProfilePage() {
   const qc = useQueryClient()
@@ -14,6 +16,8 @@ export function PublicProfilePage() {
   const [searchParams] = useSearchParams()
   const [showChat, setShowChat] = useState(searchParams.get('chat') === '1')
   const [draft, setDraft] = useState('')
+  const [readingToDelete, setReadingToDelete] = useState<number | null>(null)
+
   const meId = getUserIdFromToken()
   const viewedId = userId ? Number(userId) : null
   const isOwnProfile = meId != null && viewedId != null && meId === viewedId
@@ -72,9 +76,19 @@ export function PublicProfilePage() {
     },
   })
 
-  if (visitQ.isLoading) return <div className="card">Carregando...</div>
-  if (visitQ.isError) return <div className="card error">Erro ao carregar perfil.</div>
-  if (!visitQ.data) return <div className="card muted">Perfil não encontrado.</div>
+  const deleteReadingM = useMutation({
+    mutationFn: (id: number) => api(`/reader/readings/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast.success('Leitura removida com sucesso!')
+      setReadingToDelete(null)
+      qc.invalidateQueries({ queryKey: ['publicVisit', userId] })
+    },
+    onError: (err: any) => toast.error(err.message || 'Erro ao remover')
+  })
+
+  if (visitQ.isLoading) return <div className="container" style={{ padding: '40px', textAlign: 'center' }}>Carregando perfil...</div>
+  if (visitQ.isError) return <div className="container error" style={{ padding: '40px', textAlign: 'center' }}>Erro ao carregar perfil.</div>
+  if (!visitQ.data) return <div className="container muted" style={{ padding: '40px', textAlign: 'center' }}>Perfil não encontrado.</div>
 
   const profile = visitQ.data
   const u = profile.user
@@ -110,11 +124,27 @@ export function PublicProfilePage() {
             <div className="avatar-circle visit-avatar">
               {u.imagem_url ? <img src={u.imagem_url} alt={u.nome} /> : <span>{u.nome.slice(0, 1).toUpperCase()}</span>}
             </div>
-            <div style={{ flex: 1 }}>
-              <h1>{u.nome}</h1>
-              <p>{profile.user.headline}</p>
+            <div style={{ flex: 1, paddingBottom: '8px' }}>
+              <h1 style={{ 
+                margin: 0, 
+                fontSize: '2.4rem', 
+                fontWeight: 900, 
+                color: 'var(--primary)', 
+                letterSpacing: '-1.5px',
+                lineHeight: 1
+              }}>
+                {u.nome}
+              </h1>
+              <p style={{ 
+                margin: '8px 0 0', 
+                fontSize: '1.1rem', 
+                color: 'var(--muted)',
+                fontWeight: 500
+              }}>
+                {profile.user.headline || 'Membro da comunidade'}
+              </p>
             </div>
-            <div className="row">
+            <div className="row" style={{ paddingBottom: '12px' }}>
               {auth.token && !isOwnProfile ? (
                 <>
                   <button className="btn" type="button" onClick={() => setShowChat((v) => !v)}>
@@ -204,23 +234,68 @@ export function PublicProfilePage() {
               )) : <p className="muted">Nenhuma contribuição em destaque.</p>}
             </div>
 
-            <div className="card" style={{ marginTop: 16 }}>
-              <h3 style={{ marginTop: 0 }}>Diário de Leitura</h3>
-              <div className="stack">
+            <div className="card" style={{ marginTop: 24, padding: '24px' }}>
+              <h3 style={{ marginTop: 0, marginBottom: '20px' }}>📖 Diário de Leitura</h3>
+              <div className="stack" style={{ gap: '16px' }}>
                 {profile.reading_log.length ? (
                   profile.reading_log.map((r) => (
-                    <div key={r.id} className="search-card">
-                      <div className="avatar-circle">📖</div>
-                      <div>
-                        <strong>{r.titulo}</strong>
-                        <div className="muted">
-                          {r.autor} — <span style={{ textTransform: 'capitalize' }}>{r.status.replace('_', ' ')}</span>
+                    <div key={r.id} className="card" style={{ borderRadius: '16px', padding: '16px', border: '1px solid var(--border)', background: 'var(--surface)' }}>
+                      <div className="row" style={{ alignItems: 'flex-start', gap: '20px' }}>
+                        <div className="book-cover-sm" style={{ width: '80px', height: '110px', flexShrink: 0 }}>
+                           {r.imagem_url ? (
+                             <img src={r.imagem_url} alt={r.titulo} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                           ) : (
+                             <div style={{ width: '100%', height: '100%', background: 'var(--surface-2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📖</div>
+                           )}
+                        </div>
+                        
+                        <div style={{ flex: 1 }}>
+                          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                              <strong style={{ fontSize: '1.1rem', display: 'block' }}>{r.titulo}</strong>
+                              <div className="muted">{r.autor}</div>
+                            </div>
+                            <span className={`pill ${r.status === 'lido' ? 'success' : r.status === 'lendo' ? 'primary' : ''}`} style={{ textTransform: 'uppercase', fontSize: '10px' }}>
+                              {r.status.replace('_', ' ')}
+                            </span>
+                          </div>
+
+                          <div style={{ marginTop: '12px' }}>
+                             {r.nota ? (
+                               <div className="row" style={{ gap: '4px', color: '#f59e0b' }}>
+                                 {Array.from({ length: 5 }).map((_, i) => (
+                                   <span key={i} style={{ fontSize: '16px' }}>{i < r.nota! ? '★' : '☆'}</span>
+                                 ))}
+                               </div>
+                             ) : (
+                               <span className="muted" style={{ fontSize: '12px' }}>Ainda não avaliado</span>
+                             )}
+                          </div>
+
+                          {isOwnProfile && (
+                            <div className="row" style={{ marginTop: '16px', gap: '12px' }}>
+                              <Link 
+                                to={`/leitor/leituras/editar/${r.livro_id}`} 
+                                className="btn secondary" 
+                                style={{ fontSize: '12px', height: '32px', minHeight: 'unset', padding: '0 12px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                              >
+                                📝 Editar
+                              </Link>
+                              <button 
+                                className="btn secondary" 
+                                style={{ fontSize: '12px', height: '32px', minHeight: 'unset', padding: '0 12px', flex: 1, color: 'var(--error)', borderColor: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                                onClick={() => setReadingToDelete(r.id)}
+                              >
+                                🗑️ Remover
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="muted">Sem leituras recentes.</p>
+                  <p className="muted" style={{ textAlign: 'center', padding: '40px' }}>Sem leituras registradas ainda.</p>
                 )}
               </div>
             </div>
@@ -286,6 +361,17 @@ export function PublicProfilePage() {
           </div>
         </div>
       </section>
+
+      <ConfirmModal 
+        isOpen={readingToDelete !== null}
+        title="Remover Leitura"
+        message="Deseja remover este registro do seu diário de leitura? Esta ação não pode ser desfeita."
+        confirmLabel="Sim, Remover"
+        cancelLabel="Cancelar"
+        isDanger={true}
+        onConfirm={() => readingToDelete && deleteReadingM.mutate(readingToDelete)}
+        onCancel={() => setReadingToDelete(null)}
+      />
     </div>
   )
 }

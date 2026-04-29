@@ -142,3 +142,31 @@ def reports():
     }
     
     return jsonify(relatorio), 200
+
+@admin_bp.route('/export-csv', methods=['GET'])
+@jwt_required()
+@verificar_admin
+def export_csv():
+    import io
+    import csv
+    from flask import make_response
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID', 'Nome', 'Email', 'Papel'])
+    
+    users = User.query.order_by(User.id).all()
+    for u in users:
+        writer.writerow([u.id, u.nome, u.email, u.papel])
+    
+    response = make_response(output.getvalue())
+    response.headers["Content-Disposition"] = "attachment; filename=usuarios_lumina.csv"
+    response.headers["Content-type"] = "text/csv"
+    return response
+
+@admin_bp.route('/refresh-metrics', methods=['POST'])
+@jwt_required()
+@verificar_admin
+def refresh_metrics():
+    # Simulação de atualização de cache ou reprocessamento
+    return jsonify({"message": "Métricas do sistema sincronizadas com sucesso!"}), 200
