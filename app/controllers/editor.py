@@ -62,9 +62,11 @@ def list_editor_requests():
             {
                 "id": r.id,
                 "leitor_id": r.leitor_id,
+                "leitor_nome": r.leitor.nome if r.leitor else f"Leitor #{r.leitor_id}",
                 "livro_id": r.livro_id,
                 "livro_titulo": r.livro.titulo if r.livro else None,
                 "livro_autor": r.livro.autor if r.livro else None,
+                "livro_imagem_url": image_url(r.livro.imagem) if r.livro else None,
                 "conteudo": r.conteudo,
                 "resposta": r.resposta,
                 "status": r.status,
@@ -135,31 +137,48 @@ def respond_request(id):
 @verificar_editor
 def list_books():
     """
-    Listar livros da editora (Apenas Editor)
-    ---
-    tags:
-      - Editor
-    security:
-      - Bearer: []
-    responses:
-      200:
-        description: Lista de livros
+    Listar livros da editora com busca e paginação (Apenas Editor)
     """
     editor_id = int(get_jwt_identity())
-    books = Livro.query.filter_by(editor_id=editor_id).all()
-    return jsonify([
-        {
-            "id": b.id,
-            "titulo": b.titulo,
-            "autor": b.autor,
-            "preco": str(b.preco),
-            "estoque": b.estoque,
-            "descricao": b.descricao,
-            "imagem": b.imagem,
-            "imagem_url": image_url(b.imagem),
-            "data_cadastro": b.data_cadastro.isoformat()
-        } for b in books
-    ]), 200
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    q = request.args.get('q', '')
+    genero = request.args.get('genero', '')
+
+    query = Livro.query.filter_by(editor_id=editor_id)
+    
+    if q:
+        query = query.filter(
+            db.or_(
+                Livro.titulo.ilike(f"%{q}%"),
+                Livro.autor.ilike(f"%{q}%")
+            )
+        )
+    
+    if genero:
+        query = query.filter_by(genero=genero)
+
+    pagination = query.order_by(Livro.data_cadastro.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    
+    return jsonify({
+        "items": [
+            {
+                "id": b.id,
+                "titulo": b.titulo,
+                "autor": b.autor,
+                "genero": b.genero,
+                "preco": str(b.preco),
+                "estoque": b.estoque,
+                "descricao": b.descricao,
+                "imagem": b.imagem,
+                "imagem_url": image_url(b.imagem),
+                "data_cadastro": b.data_cadastro.isoformat()
+            } for b in pagination.items
+        ],
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages
+    }), 200
 
 
 @editor_bp.route("/books", methods=["POST"])
@@ -201,13 +220,10 @@ def create_book():
     titulo = request.form.get("titulo")
     autor = request.form.get("autor")
     preco = _parse_preco(request.form.get("preco"))
-    estoque_raw = request.form.get("estoque")
+    estoque = request.form.get("estoque", 0, type=int)
+    genero = request.form.get("genero", "")
     descricao = request.form.get("descricao")
 
-    try:
-        estoque = int(estoque_raw if estoque_raw is not None else 0)
-    except (TypeError, ValueError):
-        return jsonify({"message": "estoque inválido"}), 400
     if estoque < 0:
         return jsonify({"message": "estoque deve ser maior ou igual a zero"}), 400
 
@@ -224,6 +240,7 @@ def create_book():
         autor=autor,
         preco=preco,
         estoque=estoque,
+        genero=genero,
         descricao=descricao,
         imagem=imagem_path
     )
@@ -287,6 +304,10 @@ def update_book(id):
         livro.titulo = request.form.get("titulo")
     if "autor" in request.form:
         livro.autor = request.form.get("autor")
+    if "estoque" in request.form:
+        livro.estoque = request.form.get("estoque", type=int)
+    if "genero" in request.form:
+        livro.genero = request.form.get("genero")
     if "preco" in request.form:
         preco = _parse_preco(request.form.get("preco"))
         if preco is None:
@@ -329,15 +350,8 @@ def update_book(id):
 @verificar_editor
 def delete_book(id):
     """
-    Remover um livro (Apenas Editor)
-    ---
-    tags:
-      - Editor
-    security:
-      - Bearer: []
-    responses:
-      200:
-        description: Livro removido com sucesso
+    Remover um livro do catálogo de vendas (Apenas Editor)
+    Zera o estoque para preservar o histórico de leitores e pedidos.
     """
     editor_id = int(get_jwt_identity())
     livro = Livro.query.filter_by(id=id, editor_id=editor_id).first()
@@ -345,12 +359,7 @@ def delete_book(id):
     if not livro:
         return jsonify({"message": "Livro não encontrado"}), 404
 
-    if livro.imagem:
-        image_path = os.path.join(current_app.config["UPLOAD_FOLDER"], livro.imagem)
-        if os.path.exists(image_path):
-            os.remove(image_path)
-
-    db.session.delete(livro)
+    livro.estoque = 0
     db.session.commit()
     
-    return jsonify({"message": "Livro removido com sucesso"}), 200
+    return jsonify({"message": "Livro removido do catálogo de vendas (estoque zerado)"}), 200

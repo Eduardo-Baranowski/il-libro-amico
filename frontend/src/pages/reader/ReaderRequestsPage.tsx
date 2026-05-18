@@ -20,6 +20,7 @@ export function ReaderRequestsPage() {
 
   return (
     <div className="card-container">
+      <ExploreBooks />
       <div className="requests-shell">
         <div className="requests-header">
           <h1 style={{ margin: 0 }}>Minhas Solicitações</h1>
@@ -43,7 +44,7 @@ export function ReaderRequestsPage() {
                   {r.livro_imagem_url ? (
                     <img src={r.livro_imagem_url} alt={r.livro_titulo ?? 'Livro'} />
                   ) : (
-                    <div className="request-placeholder">📖</div>
+                    <div className="feed-book-placeholder" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem' }}>📖</div>
                   )}
                 </div>
 
@@ -87,8 +88,6 @@ export function ReaderRequestsPage() {
           isLoading={q.isFetching}
         />
       </div>
-      
-      <ExploreBooks />
     </div>
   )
 }

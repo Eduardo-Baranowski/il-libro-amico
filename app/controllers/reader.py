@@ -473,8 +473,13 @@ def list_editor_books(editor_id):
 def list_all_books():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 12, type=int)
+    genero = request.args.get('genero', '')
+
+    query = Livro.query
+    if genero:
+        query = query.filter_by(genero=genero)
     
-    pagination = Livro.query.paginate(page=page, per_page=per_page, error_out=False)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     books = pagination.items
     
     return jsonify({
@@ -483,6 +488,7 @@ def list_all_books():
                 "id": b.id,
                 "titulo": b.titulo,
                 "autor": b.autor,
+                "genero": b.genero,
                 "preco": str(b.preco),
                 "estoque": b.estoque,
                 "editor_id": b.editor_id,
@@ -523,13 +529,14 @@ def search():
         limit = 8
     limit = max(1, min(25, limit))
 
-    if not q:
+    if not q and not genero:
         return jsonify({"books": [], "users": [], "editors": []}), 200
 
     like = f"%{q}%"
-    books = (
-        Livro.query.join(User, Livro.editor_id == User.id)
-        .filter(
+    
+    book_query = Livro.query
+    if q:
+        book_query = book_query.join(User, Livro.editor_id == User.id).filter(
             db.or_(
                 Livro.titulo.ilike(like),
                 Livro.autor.ilike(like),
@@ -537,10 +544,12 @@ def search():
                 User.nome.ilike(like),
             )
         )
-        .order_by(Livro.titulo.asc())
-        .limit(limit)
-        .all()
-    )
+    
+    if genero:
+        book_query = book_query.filter_by(genero=genero)
+    
+    books = book_query.order_by(Livro.titulo.asc()).limit(limit).all()
+
     users = (
         User.query.filter(User.nome.ilike(like))
         .order_by(User.nome.asc())
@@ -561,6 +570,7 @@ def search():
                     "id": b.id,
                     "titulo": b.titulo,
                     "autor": b.autor,
+                    "genero": b.genero,
                     "preco": str(b.preco),
                     "estoque": b.estoque,
                     "editor_id": b.editor_id,
@@ -802,31 +812,38 @@ from sqlalchemy import func
 @reader_bp.route('/recommendations', methods=['GET'])
 def get_recommendations():
     """
-    Obter recomendações de livros baseadas em avaliações (Público)
+    Obter recomendações de livros baseadas em avaliações com paginação
     """
-    # Buscar livros com as melhores médias de nota
-    top_books = db.session.query(
-        Livro, 
-        func.avg(Leitura.nota).label('average_rating')
-    ).join(Leitura, Livro.id == Leitura.livro_id) \
-     .filter(Leitura.nota.isnot(None)) \
-     .group_by(Livro.id) \
-     .order_by(db.desc('average_rating')) \
-     .limit(6) \
-     .all()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 6, type=int)
 
-    if not top_books:
-        # Se não houver avaliações, retorna livros recentes
-        books = Livro.query.order_by(Livro.data_cadastro.desc()).limit(6).all()
-        return jsonify([
+    # Subquery para média de notas
+    avg_ratings = db.session.query(
+        Leitura.livro_id,
+        func.avg(Leitura.nota).label('average_rating')
+    ).filter(Leitura.nota.isnot(None)).group_by(Leitura.livro_id).subquery()
+
+    # Query principal unindo Livro com a média de notas
+    query = db.session.query(Livro, func.coalesce(avg_ratings.c.average_rating, 0).label('average_rating'))\
+        .outerjoin(avg_ratings, Livro.id == avg_ratings.c.livro_id)\
+        .order_by(db.desc('average_rating'), Livro.data_cadastro.desc())
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return jsonify({
+        "items": [
             {
-                "id": b.id,
-                "titulo": b.titulo,
-                "autor": b.autor,
-                "imagem_url": image_url(b.imagem),
-                "average_rating": 0.0
-            } for b in books
-        ]), 200
+                "id": b.Livro.id,
+                "titulo": b.Livro.titulo,
+                "autor": b.Livro.autor,
+                "imagem_url": image_url(b.Livro.imagem),
+                "average_rating": float(round(b.average_rating, 1))
+            } for b in pagination.items
+        ],
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages
+    }), 200
 
     return jsonify([
         {

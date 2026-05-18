@@ -40,6 +40,8 @@ export function ReaderMyReadingsPage() {
 
   return (
     <div className="card-container">
+      <ExploreBooks />
+
       <div className="readings-header">
         <h1 style={{ marginTop: 0, marginBottom: 8 }}>Minhas leituras</h1>
         <p className="muted" style={{ marginBottom: 24 }}>Gerencie seus livros e experiências literárias.</p>
@@ -62,7 +64,7 @@ export function ReaderMyReadingsPage() {
                     className="reading-book-cover"
                   />
                 ) : (
-                  <div className="reading-book-placeholder">📖</div>
+                  <div className="feed-book-placeholder" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem' }}>📖</div>
                 )}
               </div>
               
@@ -124,7 +126,6 @@ export function ReaderMyReadingsPage() {
         onConfirm={() => readingToDelete && deleteM.mutate(readingToDelete)}
         onCancel={() => setReadingToDelete(null)}
       />
-      <ExploreBooks />
     </div>
   )
 }

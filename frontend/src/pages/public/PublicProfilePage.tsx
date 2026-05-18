@@ -235,7 +235,7 @@ export function PublicProfilePage() {
                     {r.livro.imagem_url ? (
                       <img src={r.livro.imagem_url} alt={r.livro.titulo} style={{ width: '100%', borderRadius: '12px', boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }} />
                     ) : (
-                      <div className="avatar-circle" style={{ width: '100%', height: '120px', borderRadius: '12px', background: 'var(--surface-2)' }}>📖</div>
+                      <div className="feed-book-placeholder" style={{ width: '100%', height: '120px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>📖</div>
                     )}
                   </Link>
                   <div className="stack" style={{ gap: '12px' }}>

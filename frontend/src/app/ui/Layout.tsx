@@ -69,6 +69,9 @@ export function Layout() {
               <Link className="nav-link" to="/">
                 Início
               </Link>
+              <Link className="nav-link" to="/explorar">
+                Explorar
+              </Link>
               <Link className="nav-link" to="/livros">
                 Livros
               </Link>
@@ -185,6 +188,9 @@ export function Layout() {
                       <div className="nav-only-mobile">
                         <Link className="dropdown-item" to="/" onClick={() => setOpenUserMenu(false)}>
                           🏠 Início
+                        </Link>
+                        <Link className="dropdown-item" to="/explorar" onClick={() => setOpenUserMenu(false)}>
+                          ✨ Explorar
                         </Link>
                         <Link className="dropdown-item" to="/livros" onClick={() => setOpenUserMenu(false)}>
                           📚 Livros Catálogo
