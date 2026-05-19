@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
-import type { BookEditor, PaginatedResponse } from '../../lib/types'
+import type { BookEditor, BookLookupItem, PaginatedResponse } from '../../lib/types'
 import { ConfirmModal } from '../../app/components/ConfirmModal'
 import { Pagination } from '../../app/components/Pagination'
 
@@ -28,6 +28,7 @@ function buildFormData(fields: {
   estoque?: string
   descricao?: string
   imagem?: File | null
+  open_library_cover_id?: number | null
 }) {
   const fd = new FormData()
   if (fields.titulo != null) fd.set('titulo', fields.titulo)
@@ -37,6 +38,9 @@ function buildFormData(fields: {
   if (fields.estoque != null) fd.set('estoque', fields.estoque)
   if (fields.descricao != null) fd.set('descricao', fields.descricao)
   if (fields.imagem) fd.set('imagem', fields.imagem)
+  if (fields.open_library_cover_id != null) {
+    fd.set('open_library_cover_id', String(fields.open_library_cover_id))
+  }
   return fd
 }
 
@@ -54,11 +58,33 @@ export function EditorBooksPage() {
 
   const [formBook, setFormBook] = useState({ titulo: '', autor: '', genero: 'Romance', preco: '', estoque: '0', descricao: '' })
   const [file, setFile] = useState<File | null>(null)
+  const [coverId, setCoverId] = useState<number | null>(null)
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [lookupQ, setLookupQ] = useState('')
+  const [debouncedLookupQ, setDebouncedLookupQ] = useState('')
   const [stockDraft, setStockDraft] = useState<Record<number, string>>({})
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedLookupQ(lookupQ.trim()), 400)
+    return () => clearTimeout(timer)
+  }, [lookupQ])
+
+  const lookupQuery = useQuery({
+    queryKey: ['editorBookLookup', debouncedLookupQ],
+    queryFn: () =>
+      api<{ items: BookLookupItem[] }>(
+        `/editor/books/lookup?q=${encodeURIComponent(debouncedLookupQ)}&limit=8`
+      ),
+    enabled: !editingBookId && debouncedLookupQ.length >= 2,
+  })
 
   const submitM = useMutation({
     mutationFn: async () => {
-      const fd = buildFormData({ ...formBook, imagem: file })
+      const fd = buildFormData({
+        ...formBook,
+        imagem: file,
+        open_library_cover_id: file ? null : coverId,
+      })
       if (editingBookId) {
         return await api(`/editor/books/${editingBookId}`, {
           method: 'PUT',
@@ -122,6 +148,26 @@ export function EditorBooksPage() {
     setEditingBookId(null)
     setFormBook({ titulo: '', autor: '', genero: 'Romance', preco: '', estoque: '0', descricao: '' })
     setFile(null)
+    setCoverId(null)
+    setCoverPreview(null)
+    setLookupQ('')
+    setDebouncedLookupQ('')
+  }
+
+  const applyLookup = (item: BookLookupItem) => {
+    setFormBook((prev) => ({
+      ...prev,
+      titulo: item.titulo,
+      autor: item.autor,
+      genero: item.genero && GENRES.includes(item.genero) ? item.genero : prev.genero,
+      descricao: item.descricao || prev.descricao,
+    }))
+    setCoverId(item.cover_id)
+    setCoverPreview(item.imagem_url)
+    setFile(null)
+    setLookupQ('')
+    setDebouncedLookupQ('')
+    toast.success('Dados preenchidos — confira preço e estoque antes de publicar.')
   }
 
   const books = useMemo(() => q.data?.items ?? [], [q.data])
@@ -272,8 +318,91 @@ export function EditorBooksPage() {
           )}
         </div>
         <p className="muted small" style={{ marginBottom: '24px' }}>
-          {editingBookId ? 'Atualize as informações da obra no catálogo.' : 'Insira os detalhes para disponibilizar o livro no catálogo global.'}
+          {editingBookId
+            ? 'Atualize as informações da obra no catálogo.'
+            : 'Busque na Open Library para preencher título, autor, sinopse e capa automaticamente.'}
         </p>
+
+        {!editingBookId ? (
+          <div className="stack" style={{ gap: '8px', marginBottom: '20px', position: 'relative' }}>
+            <label className="label">Buscar obra (Open Library)</label>
+            <input
+              className="input"
+              placeholder="Título, autor ou ISBN…"
+              value={lookupQ}
+              onChange={(e) => setLookupQ(e.target.value)}
+              style={{ borderRadius: '12px' }}
+            />
+            {lookupQuery.isFetching ? (
+              <p className="muted small" style={{ margin: 0 }}>Buscando…</p>
+            ) : null}
+            {(lookupQuery.data?.items?.length ?? 0) > 0 ? (
+              <ul
+                className="card"
+                style={{
+                  listStyle: 'none',
+                  margin: 0,
+                  padding: 0,
+                  maxHeight: '280px',
+                  overflowY: 'auto',
+                  borderRadius: '12px',
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 20,
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.12)',
+                }}
+              >
+                {lookupQuery.data!.items.map((item) => (
+                  <li key={`${item.open_library_key ?? item.titulo}-${item.autor}`}>
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        borderRadius: 0,
+                        border: 'none',
+                        borderBottom: '1px solid var(--border)',
+                        padding: '12px 14px',
+                        display: 'flex',
+                        gap: '12px',
+                        alignItems: 'center',
+                        background: 'var(--surface)',
+                      }}
+                      onClick={() => applyLookup(item)}
+                    >
+                      {item.imagem_url ? (
+                        <img
+                          src={item.imagem_url}
+                          alt=""
+                          style={{
+                            width: 36,
+                            height: 52,
+                            objectFit: 'cover',
+                            borderRadius: '6px',
+                            flexShrink: 0,
+                          }}
+                        />
+                      ) : (
+                        <span style={{ width: 36, textAlign: 'center' }}>📖</span>
+                      )}
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <strong style={{ display: 'block', fontSize: '14px' }}>{item.titulo}</strong>
+                        <span className="muted small">
+                          {item.autor}
+                          {item.ano ? ` · ${item.ano}` : ''}
+                          {item.genero ? ` · ${item.genero}` : ''}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="stack" style={{ gap: '20px' }}>
           <div>
@@ -306,8 +435,36 @@ export function EditorBooksPage() {
           </div>
           <div>
             <label className="label">Capa do Livro {editingBookId && '(Opcional se não mudar)'}</label>
+            {coverPreview && !file ? (
+              <div style={{ marginBottom: '12px', textAlign: 'center' }}>
+                <img
+                  src={coverPreview}
+                  alt="Prévia da capa"
+                  style={{
+                    maxWidth: '120px',
+                    borderRadius: '12px',
+                    boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
+                  }}
+                />
+                <p className="muted small" style={{ marginTop: '8px' }}>
+                  Capa da Open Library (será baixada ao publicar)
+                </p>
+              </div>
+            ) : null}
             <div className="search-card" style={{ padding: '16px', borderStyle: 'dashed', borderRadius: '16px', textAlign: 'center' }}>
-               <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ fontSize: '12px' }} />
+               <input
+                 type="file"
+                 accept="image/*"
+                 onChange={(e) => {
+                   const f = e.target.files?.[0] ?? null
+                   setFile(f)
+                   if (f) {
+                     setCoverId(null)
+                     setCoverPreview(null)
+                   }
+                 }}
+                 style={{ fontSize: '12px' }}
+               />
             </div>
           </div>
 

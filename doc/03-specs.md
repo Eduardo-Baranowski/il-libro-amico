@@ -136,7 +136,8 @@ Endpoints paginados incluem, entre outros: `GET /reader/books`, `GET /reader/rec
 | Método | Rota | Auth | Descrição |
 |--------|------|------|-----------|
 | GET | `/editor/books` | JWT editor | Lista própria; `page`, `per_page`, `q`, `genero` |
-| POST | `/editor/books` | JWT editor | Cadastro (multipart: `titulo`, `autor`, `preco`, `estoque`, `genero`, `descricao`, `imagem`) |
+| GET | `/editor/books/lookup` | JWT editor | Busca Open Library; `q` (min. 2 chars), `limit`; retorna título, autor, descrição, gênero, capa |
+| POST | `/editor/books` | JWT editor | Cadastro (multipart: `titulo`, `autor`, `preco`, `estoque`, `genero`, `descricao`, `imagem`, `open_library_cover_id`) |
 | PUT | `/editor/books/<id>` | JWT editor | Atualização (inclui `estoque`, `genero`) |
 | DELETE | `/editor/books/<id>` | JWT editor | Remoção lógica: `estoque = 0` |
 | GET | `/editor/requests` | JWT editor | Solicitações recebidas |

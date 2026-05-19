@@ -7,6 +7,24 @@ export interface PaginatedResponse<T> {
 
 import type { Role } from './token'
 
+export type BookLookupItem = {
+  titulo: string
+  autor: string
+  descricao: string | null
+  genero: string | null
+  ano: number | null
+  isbn: string | null
+  cover_id: number | null
+  imagem_url: string | null
+  fonte: string
+  open_library_key: string | null
+}
+
+export type BookLookupResponse = {
+  items: BookLookupItem[]
+  fonte: string
+}
+
 export type LoginResponse = { 
   token_sessao: string; 
   papel: Role;

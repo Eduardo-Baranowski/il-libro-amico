@@ -1,4 +1,62 @@
+from unittest.mock import ANY, patch
+
 from app.models.request import Request
+
+
+def test_editor_books_lookup_requires_min_query(client, editor_token, auth_header):
+    resp = client.get("/editor/books/lookup?q=a", headers=auth_header(editor_token))
+    assert resp.status_code == 400
+
+
+@patch("app.controllers.editor.search_books")
+def test_editor_books_lookup_returns_items(mock_search, client, editor_token, auth_header):
+    mock_search.return_value = [
+        {
+            "titulo": "Dom Casmurro",
+            "autor": "Machado de Assis",
+            "descricao": "Romance clássico.",
+            "genero": "Romance",
+            "ano": 1899,
+            "isbn": None,
+            "cover_id": 647501,
+            "imagem_url": "https://covers.openlibrary.org/b/id/647501-M.jpg",
+            "fonte": "open_library",
+            "open_library_key": "/works/OL123W",
+        }
+    ]
+    resp = client.get(
+        "/editor/books/lookup?q=dom+casmurro",
+        headers=auth_header(editor_token),
+    )
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert len(body["items"]) == 1
+    assert body["items"][0]["titulo"] == "Dom Casmurro"
+    mock_search.assert_called_once()
+
+
+@patch("app.controllers.editor.download_cover_to_uploads")
+def test_editor_create_book_with_open_library_cover(
+    mock_download, client, editor_token, auth_header
+):
+    mock_download.return_value = "books/fake-cover.jpg"
+    resp = client.post(
+        "/editor/books",
+        data={
+            "titulo": "Dom Casmurro",
+            "autor": "Machado de Assis",
+            "preco": "29.90",
+            "open_library_cover_id": "647501",
+        },
+        headers=auth_header(editor_token),
+    )
+    assert resp.status_code == 201
+    mock_download.assert_called_once_with(647501, ANY)
+
+    from app.models.livro import Livro
+
+    livro = Livro.query.get(resp.get_json()["id"])
+    assert livro.imagem == "books/fake-cover.jpg"
 
 
 def test_editor_create_book_success(client, editor_token, auth_header):

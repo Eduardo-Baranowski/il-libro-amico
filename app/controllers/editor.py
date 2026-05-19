@@ -1,12 +1,15 @@
 from functools import wraps
 import os
 from decimal import Decimal, InvalidOperation
+
+import requests
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 
 from .. import db
 from ..models.request import Request
 from ..models.livro import Livro
+from ..services.book_lookup import download_cover_to_uploads, search_books
 from ..utils import save_image, image_url
 
 editor_bp = Blueprint("editor", __name__)
@@ -132,6 +135,25 @@ def respond_request(id):
     return jsonify({"message": "Solicitação respondida com sucesso"}), 200
 
 
+@editor_bp.route("/books/lookup", methods=["GET"])
+@jwt_required()
+@verificar_editor
+def lookup_books():
+    """Buscar metadados de livros na Open Library (autopreenchimento do cadastro)."""
+    q = (request.args.get("q") or "").strip()
+    limit = request.args.get("limit", 8, type=int)
+
+    if len(q) < 2:
+        return jsonify({"message": "Informe ao menos 2 caracteres para buscar.", "items": []}), 400
+
+    try:
+        items = search_books(q, limit=limit)
+    except requests.RequestException:
+        return jsonify({"message": "Serviço de busca temporariamente indisponível.", "items": []}), 503
+
+    return jsonify({"items": items, "fonte": "open_library"}), 200
+
+
 @editor_bp.route("/books", methods=["GET"])
 @jwt_required()
 @verificar_editor
@@ -231,8 +253,16 @@ def create_book():
         return jsonify({"message": "Título, autor e preço válido são obrigatórios"}), 400
 
     imagem_path = None
-    if "imagem" in request.files:
+    if "imagem" in request.files and request.files["imagem"].filename:
         imagem_path = save_image(request.files["imagem"], "books")
+    elif request.form.get("open_library_cover_id"):
+        try:
+            cover_id = int(request.form.get("open_library_cover_id"))
+            imagem_path = download_cover_to_uploads(
+                cover_id, current_app.config["UPLOAD_FOLDER"]
+            )
+        except (TypeError, ValueError):
+            pass
 
     novo_livro = Livro(
         editor_id=editor_id,
@@ -324,14 +354,26 @@ def update_book(id):
             return jsonify({"message": "estoque deve ser maior ou igual a zero"}), 400
         livro.estoque = estoque
         
-    if "imagem" in request.files:
-        # Remover imagem antiga se existir
+    if "imagem" in request.files and request.files["imagem"].filename:
         if livro.imagem:
             old_path = os.path.join(current_app.config["UPLOAD_FOLDER"], livro.imagem)
             if os.path.exists(old_path):
                 os.remove(old_path)
-        
         livro.imagem = save_image(request.files["imagem"], "books")
+    elif request.form.get("open_library_cover_id"):
+        try:
+            cover_id = int(request.form.get("open_library_cover_id"))
+            new_path = download_cover_to_uploads(
+                cover_id, current_app.config["UPLOAD_FOLDER"]
+            )
+            if new_path:
+                if livro.imagem:
+                    old_path = os.path.join(current_app.config["UPLOAD_FOLDER"], livro.imagem)
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+                livro.imagem = new_path
+        except (TypeError, ValueError):
+            pass
 
     try:
         db.session.commit()

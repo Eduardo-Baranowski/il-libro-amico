@@ -101,7 +101,8 @@ npm run dev
 
 ### Editora (`/editor`)
 - `GET /editor/books`: Listar livros da própria editora.
-- `POST /editor/books`: Cadastrar novo livro (com upload de imagem).
+- `GET /editor/books/lookup?q=`: Buscar metadados na Open Library (autopreenchimento do cadastro).
+- `POST /editor/books`: Cadastrar novo livro (upload de imagem ou `open_library_cover_id`).
 - `PUT /editor/books/<id>`: Atualizar livro existente (incluindo estoque).
 - `DELETE /editor/books/<id>`: Remover do catálogo (zera estoque; preserva histórico).
 - `GET /editor/requests`: Listar solicitações recebidas.
