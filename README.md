@@ -27,7 +27,7 @@ Esta é uma API REST desenvolvida com **Flask**, utilizando **SQLAlchemy** para 
 flask db upgrade
 ```
 
-Se você adicionou novas tabelas/models (ex.: `Leitura`), aplique as migrations:
+Após atualizar o repositório (ex.: campo `genero` em `Livro`), aplique as migrations:
 
 ```bash
 flask db upgrade
@@ -54,6 +54,7 @@ npm run dev
 
 - Em dev, o frontend chama `VITE_API_BASE_URL=/api` e o Vite encaminha para o Flask.
 - URL do frontend: `http://127.0.0.1:5173`
+- Explorar recomendações: `http://127.0.0.1:5173/explorar`
 
 ## Perfis e Funcionalidades
 
@@ -72,7 +73,8 @@ npm run dev
 - `POST /reader/friendships/<id>/reject`: Recusar solicitação de amizade.
 - `GET /reader/notifications`: Notificações de amizade e mensagens não lidas.
 - `GET/POST /reader/users/<id>/messages`: Listar e enviar mensagens diretas.
-- `GET /reader/books`: Listagem de todos os livros.
+- `GET /reader/books`: Listagem paginada de livros (`?genero=` opcional).
+- `GET /reader/recommendations`: Recomendações por média de notas (paginado, público).
 - `GET /reader/search?q=...`: Busca completa por livros, usuários e editoras.
 - `GET /reader/books/<id>`: Detalhes de um livro específico.
 - `GET /reader/editors/<id>/books`: Listar livros de uma editora.
@@ -85,7 +87,7 @@ npm run dev
 - `GET /editor/books`: Listar livros da própria editora.
 - `POST /editor/books`: Cadastrar novo livro (com upload de imagem).
 - `PUT /editor/books/<id>`: Atualizar livro existente (incluindo estoque).
-- `DELETE /editor/books/<id>`: Remover livro.
+- `DELETE /editor/books/<id>`: Remover do catálogo (zera estoque; preserva histórico).
 - `GET /editor/requests`: Listar solicitações recebidas.
 - `PUT /editor/requests/<id>/respond`: Responder a uma solicitação.
 
@@ -94,13 +96,36 @@ npm run dev
 - `POST /admin/users`: Criar novos usuários (qualquer papel).
 - `GET /admin/reports`: Visualizar relatórios e estatísticas do sistema.
 
-## Testes
+## Especificação
 
-Para rodar os testes de integração:
+Requisitos, regras de negócio, API e frontend (UI/UX): [`doc/03-specs.md`](doc/03-specs.md).  
+Plano de testes: [`testing.md`](testing.md).  
+Refatoração v1.2: [`refactor.md`](refactor.md).  
+Componentes React: [`frontend/COMPONENTS.md`](frontend/COMPONENTS.md).
+
+## Testes automatizados
+
+**Backend:**
+
 ```bash
-python test_api.py
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest -q
 ```
-*(Certifique-se de que o servidor está rodando)*
+
+**Frontend:**
+
+```bash
+cd frontend
+npm install
+npm run test:run
+npm run build
+npm run lint
+```
+
+Testes de API manual (servidor em execução): `python test_api.py`.
+
+## Build do frontend
 
 Para build do frontend:
 

@@ -81,15 +81,41 @@ def test_editor_cannot_delete_other_editor_book(client, editor_token, editor_boo
     assert resp.get_json()["message"] == "Livro não encontrado"
 
 
-def test_editor_delete_book_removes_image_with_mock(client, editor_token, editor_book, auth_header, mocker):
-    editor_book.imagem = "books/temp-image.jpg"
+def test_editor_delete_book_zeros_stock_preserves_record(client, editor_token, editor_book, auth_header):
     from app import db
+    from app.models.livro import Livro
 
+    editor_book.estoque = 12
     db.session.commit()
-    mocked_remove = mocker.patch("app.controllers.editor.os.remove")
-    mocker.patch("app.controllers.editor.os.path.exists", return_value=True)
+    book_id = editor_book.id
 
-    resp = client.delete(f"/editor/books/{editor_book.id}", headers=auth_header(editor_token))
+    resp = client.delete(f"/editor/books/{book_id}", headers=auth_header(editor_token))
 
     assert resp.status_code == 200
-    mocked_remove.assert_called_once()
+    assert resp.get_json()["message"] == "Livro removido do catálogo de vendas (estoque zerado)"
+    still_there = Livro.query.get(book_id)
+    assert still_there is not None
+    assert still_there.estoque == 0
+
+
+def test_editor_list_books_supports_search_and_genero(client, editor_token, auth_header):
+    client.post(
+        "/editor/books",
+        data={
+            "titulo": "Romance Especial",
+            "autor": "Autor X",
+            "preco": "25.00",
+            "estoque": "3",
+            "genero": "Romance",
+        },
+        headers=auth_header(editor_token),
+    )
+
+    resp = client.get(
+        "/editor/books?q=Romance&genero=Romance&page=1&per_page=10",
+        headers=auth_header(editor_token),
+    )
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert "items" in body
+    assert any(item["titulo"] == "Romance Especial" for item in body["items"])

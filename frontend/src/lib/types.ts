@@ -54,6 +54,7 @@ export type BookPublic = {
   editor_id: number
   titulo: string
   autor: string
+  genero?: string | null
   preco: string
   estoque: number
   status_estoque: 'disponivel' | 'baixo' | 'esgotado'
@@ -63,10 +64,14 @@ export type BookPublic = {
   editora: string
 }
 
+/** Livro na listagem da loja (`/livros`) */
+export type Book = BookPublic
+
 export type BookEditor = {
   id: number
   titulo: string
   autor: string
+  genero?: string | null
   preco: string
   estoque: number
   descricao: string | null

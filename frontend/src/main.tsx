@@ -12,10 +12,11 @@ import { router } from './app/router'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: (count, error: any) => {
-        // Evita ficar insistindo em 401/403
-        const status = error?.status
-        if (status === 401 || status === 403) return false
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+      retry: (count, error) => {
+        const status = (error as { status?: number } | undefined)?.status
+        if (status === 401 || status === 403 || status === 408) return false
         return count < 2
       },
     },

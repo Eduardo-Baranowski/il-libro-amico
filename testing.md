@@ -4,18 +4,25 @@
 
 Definir uma estrategia de testes automatizados com abordagem **TDD First** para validar as funcionalidades criticas do sistema de gerenciamento de livros (API Flask), reduzindo risco de regressao e garantindo evolucao segura.
 
-Este plano foca nos fluxos de maior impacto por perfil (`auth`, `reader`, `editor`, `admin`) e nas validacoes de seguranca/autorizacao.
+Este plano esta alinhado a `doc/03-specs.md` (versao 1.2).
 
 ## 2. Escopo de Teste
 
 - API REST backend em `app/controllers/*.py`
-- Regras de negocio principais dos modelos `User`, `Livro`, `Request`, `Leitura`
+- Regras de negocio dos modelos `User`, `Livro`, `Request`, `Leitura`, `Compra`, `Pedido`
 - Autenticacao JWT e autorizacao por papel
+- Refinamentos v1.1: `genero`, recomendacoes paginadas, remocao logica de catalogo (`estoque = 0`)
 - Persistencia em banco SQLite isolado por teste (fixtures pytest)
+
+Incluido neste plano (v1.2):
+
+- Testes de componentes e integracao leve da API no frontend (Vitest + Testing Library)
+- Cenarios de loading, erro, vazio e retry (`QueryStatus`, `api`)
 
 Fora de escopo neste plano:
 
-- Testes E2E de frontend
+- Testes E2E com browser real (Playwright/Cypress) — roadmap futuro
+- Testes de regressao visual automatizados (Chromatic/Percy)
 - Testes de carga/performance
 - Testes de infraestrutura (Docker, deploy)
 
@@ -28,14 +35,7 @@ Para cada funcionalidade:
 3. **Refactor**: limpar duplicacao e melhorar legibilidade sem alterar comportamento.
 4. **Regression gate**: executar suite completa para garantir que alteracoes nao quebraram contratos anteriores.
 
-Regras de priorizacao:
-
-- Prioridade maxima para cenarios criticos de autenticacao, autorizacao e integridade de dados.
-- Um teste critico minimo por funcionalidade, com expansao incremental para cenarios de borda.
-
 ## 4. Arquitetura da Suite de Testes
-
-Estrutura sugerida:
 
 ```text
 tests/
@@ -50,148 +50,141 @@ tests/
 Praticas:
 
 - Uso de `client` (Flask test client) e banco efemero por teste.
-- Fixtures auxiliares para criar usuarios e obter tokens JWT por papel.
-- Assert de contrato HTTP: codigo, chave `message`, e campos obrigatorios de resposta.
+- Fixtures: `admin_token`, `editor_token`, `reader_token`, `editor_book`, `reader_request`
+- Assert de contrato HTTP: codigo, chave `message`, campos obrigatorios e estrutura paginada quando aplicavel.
 
 ## 5. Plano de Casos Criticos por Funcionalidade
 
 ### 5.1 Autenticacao (`/auth`)
 
-1. **Registro de leitor**
-   - Dado payload valido (`nome`, `email`, `senha`)
-   - Quando `POST /auth/register`
-   - Entao retorna `201` e persiste usuario com papel `leitor`.
-
-2. **Login**
-   - Dado usuario existente e senha valida
-   - Quando `POST /auth/login`
-   - Entao retorna `200`, `token_sessao` e `papel`.
-
-3. **Erro de credenciais**
-   - Dado senha invalida
-   - Quando `POST /auth/login`
-   - Entao retorna `401` com mensagem de credenciais invalidas.
+1. **Registro de leitor** — `POST /auth/register` → `201`, papel `leitor`.
+2. **Login** — credenciais validas → `200`, `token_sessao`, `papel`.
+3. **Erro de credenciais** — senha invalida → `401`.
 
 ### 5.2 Leitor (`/reader`)
 
-1. **Criar solicitacao para editora**
-   - Dado leitor autenticado e `editor_id` valido
-   - Quando `POST /reader/requests`
-   - Entao retorna `201` com `id` da solicitacao.
-
-2. **Registrar leitura**
-   - Dado leitor autenticado e livro existente
-   - Quando `POST /reader/readings` com `status` valido
-   - Entao retorna `201` e cria leitura.
-
-3. **Validacao de nota**
-   - Dado `nota` fora de `1..5`
-   - Quando `POST /reader/readings`
-   - Entao retorna `400` (regra de dominio).
-
-4. **Acesso negado por papel**
-   - Dado token de `editor` ou `admin`
-   - Quando acessar rota exclusiva de leitor
-   - Entao retorna `403`.
+1. **Criar solicitacao** — `POST /reader/requests` com `editor_id` + `livro_id` → `201`.
+2. **Registrar leitura** — `POST /reader/readings` com `status` valido → `201`.
+3. **Validacao de nota** — `nota` fora de `1..5` → `400`.
+4. **Acesso negado por papel** — token editor/admin em rota exclusiva de leitor → `403`.
+5. **Listar solicitacoes proprias (paginado)** — `GET /reader/requests` retorna `{ items, total, page, pages }`; apenas solicitacoes do leitor autenticado.
+6. **Compra com estoque** — baixa de `estoque`; estoque zero → `400`.
+7. **Recomendacoes paginadas (v1.1)** — `GET /reader/recommendations` retorna `items` com `average_rating`; ordenacao por media de notas.
+8. **Filtro por genero (v1.1)** — `GET /reader/books?genero=Romance` retorna apenas livros do genero informado.
 
 ### 5.3 Editora (`/editor`)
 
-1. **Cadastrar livro**
-   - Dado editor autenticado e payload/form valido
-   - Quando `POST /editor/books`
-   - Entao retorna `201` e livro associado ao `editor_id` do token.
-
-2. **Responder solicitacao**
-   - Dado solicitacao pendente da propria editora
-   - Quando `PUT /editor/requests/<id>/respond`
-   - Entao retorna `200` e status passa a `respondida`.
-
-3. **Impedir resposta duplicada**
-   - Dado solicitacao ja respondida
-   - Quando tentar responder novamente
-   - Entao retorna `400`.
-
-4. **Isolamento de dados entre editoras**
-   - Dado editor A
-   - Quando tenta alterar/excluir livro da editora B
-   - Entao retorna `404` para nao expor recurso alheio.
+1. **Cadastrar livro** — `POST /editor/books` → `201`, associado ao `editor_id` do token; aceita `genero`.
+2. **Responder solicitacao** — `PUT /editor/requests/<id>/respond` → `200`, status `respondida`.
+3. **Impedir resposta duplicada** — segunda resposta → `400`.
+4. **Isolamento entre editoras** — alterar/excluir livro alheio → `404`.
+5. **Remocao logica de catalogo (v1.1)** — `DELETE /editor/books/<id>` zera `estoque`, mantem registro; mensagem de estoque zerado.
+6. **Listagem com busca e genero (v1.1)** — `GET /editor/books?q=&genero=` retorna estrutura paginada filtrada.
 
 ### 5.4 Admin (`/admin`)
 
-1. **Criar usuario com papel**
-   - Dado admin autenticado e payload valido
-   - Quando `POST /admin/users`
-   - Entao retorna `201` e cria usuario com papel informado.
+1. **Criar usuario com papel** — `POST /admin/users` → `201`.
+2. **Papel invalido** — fora de `admin|editor|leitor` → `400`.
+3. **Relatorios** — `GET /admin/reports` com agregacoes coerentes.
+4. **Acesso negado** — nao-admin em `/admin/*` → `403`.
 
-2. **Validacao de papel invalido**
-   - Dado papel fora de `admin|editor|leitor`
-   - Quando `POST /admin/users`
-   - Entao retorna `400`.
+## 6. Uso de Mocks
 
-3. **Relatorios**
-   - Dado massa de dados conhecida
-   - Quando `GET /admin/reports`
-   - Entao retorna agregacoes coerentes (`total_usuarios`, `total_livros`, `usuarios`, `solicitacoes`).
+Mocks apenas para dependencias externas nao deterministas:
 
-4. **Acesso negado para nao admin**
-   - Dado token de leitor/editor
-   - Quando acessar rotas `/admin/*`
-   - Entao retorna `403`.
+- `app.utils.save_image` em testes de upload (quando necessario).
+- Evitar mock de remocao de arquivo em `DELETE` de livro: comportamento atual e remocao logica (sem `os.remove`).
 
-## 6. Uso de Mocks (quando necessario)
+Preferencia: testes de API como integracao leve; `pytest-mock` disponivel em `requirements.txt` para casos pontuais.
 
-Mocks devem ser usados apenas para dependencias externas ou efeitos colaterais nao deterministas:
+## 7. Fixtures (`tests/conftest.py`)
 
-- `app.utils.save_image`: mockar para evitar escrita real de arquivo em testes de upload.
-- `os.remove`: mockar em testes de update/delete de livro com imagem para validar chamada sem depender de FS real.
-- `flask_jwt_extended.create_access_token` (opcional em unitario puro): mock para testar fluxo sem depender do formato do token.
+- Usuarios e tokens por papel
+- `editor_book`, `reader_request`
+- Helper `auth_header(token)` → `Authorization: Bearer ...`
 
-Preferencia geral: manter testes de API como integracao leve, mockando somente I/O externo.
+## 8. Frontend — suite Vitest (`frontend/`)
 
-## 7. Dados de Teste e Fixtures
+Estrutura:
 
-Adicionar/expandir fixtures em `tests/conftest.py`:
-
-- `admin_token`, `editor_token`, `reader_token`
-- factories simples para `User`, `Livro`, `Request`, `Leitura`
-- helper para headers autenticados: `{"Authorization": f"Bearer {token}"}`
-
-Boas praticas:
-
-- Cada teste independente (sem dependencia de ordem).
-- Massa minima para expressar regra.
-- Nomes descritivos no formato `test_<feature>_<expected_behavior>`.
-
-## 8. Pipeline de Execucao e Anti-Regressao
-
-Comandos recomendados:
-
-```bash
-pytest -q
-pytest --maxfail=1 --disable-warnings
-pytest --cov=app --cov-report=term-missing
+```text
+frontend/src/
+  app/components/ui/*.test.tsx
+  lib/api.test.ts
+  test/setup.ts
 ```
 
-Politica minima sugerida:
+### 8.1 Componentes de estado
+
+| Caso | Arquivo | Assert |
+|------|---------|--------|
+| Loading | `QueryStatus.test.tsx` | Nao renderiza children; `aria-busy` |
+| Erro + retry | `ErrorState.test.tsx` | `role="alert"`; botao chama `onRetry` |
+| Vazio | `EmptyState.test.tsx` | Titulo, descricao, link CTA |
+| Render condicional | `QueryStatus.test.tsx` | Children so apos sucesso |
+
+### 8.2 Integracao API (mock fetch)
+
+| Caso | Assert |
+|------|--------|
+| Resposta 200 | JSON parseado |
+| Resposta 4xx | `ApiError` com `message` do backend |
+
+### 8.3 Acessibilidade (testes unitarios)
+
+- `EmptyState`: `role="status"`
+- `ErrorState`: `role="alert"`
+- `LoadingState`: `aria-live="polite"`
+
+### 8.4 Responsividade e E2E
+
+- **Responsivo:** validacao manual + inspecao de classes CSS (`explore-grid-responsive`, `responsive-book-row`) em review.
+- **E2E:** nao automatizado nesta versao; roteiro manual em `doc/03-specs.md` secao 13.
+
+### 8.5 Comandos
+
+```bash
+cd frontend
+npm install
+npm run test:run
+npm run build
+npm run lint
+```
+
+## 9. Pipeline de Execucao (completo)
+
+```bash
+# Backend
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest -q
+
+# Frontend
+cd frontend && npm install && npm run test:run && npm run build
+```
+
+Politica minima:
 
 - PR bloqueado se qualquer teste falhar.
-- Cobertura minima inicial: **80%** em `app/controllers` (meta evolutiva).
-- Toda correcao de bug deve incluir teste de regressao correspondente.
+- Cobertura meta evolutiva: **80%** em `app/controllers`.
+- Toda correcao de bug inclui teste de regressao.
 
-## 9. Ordem de Implementacao TDD (roadmap)
+## 10. Ordem de Implementacao TDD (roadmap)
 
-1. `test_security.py`: autorizacao por papel e 401/403 (base de seguranca).
-2. `test_auth.py`: registro e login.
-3. `test_reader.py`: solicitacoes e leituras.
-4. `test_editor.py`: livros + resposta de solicitacoes.
-5. `test_admin.py`: usuarios e relatorios.
-6. Cobertura e refino de cenarios de borda.
+1. `test_security.py` — autorizacao por papel.
+2. `test_auth.py` — registro e login.
+3. `test_reader.py` — solicitacoes, leituras, compras, recomendacoes, genero.
+4. `test_editor.py` — livros, respostas, remocao logica.
+5. `test_admin.py` — usuarios e relatorios.
 
-## 10. Dependencias de Teste
+## 11. Dependencias de Teste
 
-Dependencias adicionadas/confirmadas em `requirements.txt`:
+**Backend** (`requirements.txt`):
 
-- `pytest>=8.0.0`: framework base de testes.
-- `pytest-cov>=5.0.0`: medicao de cobertura para controle de regressao.
-- `pytest-mock>=3.14.0`: utilitario de mocks/patches para dependencias externas.
+- `pytest>=8.0.0`
+- `pytest-cov>=5.0.0`
+- `pytest-mock>=3.14.0`
 
+**Frontend** (`frontend/package.json`):
+
+- `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`

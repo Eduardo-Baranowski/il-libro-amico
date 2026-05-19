@@ -70,8 +70,10 @@ def test_reader_list_my_requests_only_own(client, reader_token, reader_request, 
 
     resp = client.get("/reader/requests", headers=auth_header(reader_token))
     assert resp.status_code == 200
-    ids = [item["id"] for item in resp.get_json()]
+    body = resp.get_json()
+    ids = [item["id"] for item in body["items"]]
     assert reader_request.id in ids
+    assert other_req.id not in ids
 
 
 def test_reader_list_editor_books_success(client, editor_user, editor_book):
@@ -104,3 +106,52 @@ def test_reader_purchase_rejects_insufficient_stock(client, reader_token, editor
     )
     assert resp.status_code == 400
     assert resp.get_json()["message"] == "Estoque insuficiente"
+
+
+def test_reader_recommendations_paginated(client, editor_book, reader_user, auth_header, reader_token):
+    client.post(
+        "/reader/readings",
+        json={"livro_id": editor_book.id, "status": "lido", "nota": 5},
+        headers=auth_header(reader_token),
+    )
+
+    resp = client.get("/reader/recommendations?page=1&per_page=10")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "items" in body
+    assert body["total"] >= 1
+    first = body["items"][0]
+    assert "average_rating" in first
+    assert first["id"] == editor_book.id
+
+
+def test_reader_list_books_filters_by_genero(client, editor_user):
+    from app.models.livro import Livro
+
+    db.session.add_all(
+        [
+            Livro(
+                editor_id=editor_user.id,
+                titulo="A",
+                autor="Autor",
+                preco="10.00",
+                estoque=1,
+                genero="Romance",
+            ),
+            Livro(
+                editor_id=editor_user.id,
+                titulo="B",
+                autor="Autor",
+                preco="10.00",
+                estoque=1,
+                genero="Tecnico",
+            ),
+        ]
+    )
+    db.session.commit()
+
+    resp = client.get("/reader/books?genero=Romance&page=1&per_page=20")
+    assert resp.status_code == 200
+    titles = [item["titulo"] for item in resp.get_json()["items"]]
+    assert "A" in titles
+    assert "B" not in titles

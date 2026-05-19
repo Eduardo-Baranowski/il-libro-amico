@@ -58,6 +58,9 @@ export function Layout() {
 
   return (
     <div className="app-shell">
+      <a href="#main-content" className="skip-link">
+        Ir para o conteúdo principal
+      </a>
       <header className="topbar">
         <div className="topbar-inner">
           <div className="nav">
@@ -266,7 +269,7 @@ export function Layout() {
         </div>
       </header>
 
-      <main className="container">
+      <main id="main-content" className="container" tabIndex={-1}>
         <Outlet />
       </main>
     </div>

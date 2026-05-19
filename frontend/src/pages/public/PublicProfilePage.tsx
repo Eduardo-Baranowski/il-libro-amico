@@ -190,7 +190,7 @@ export function PublicProfilePage() {
                           {order.itens.map((item, idx) => (
                             <div key={idx} className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                               <div className="row" style={{ gap: '16px', alignItems: 'center' }}>
-                                <img src={item.imagem_url} alt="" style={{ width: '45px', height: '64px', borderRadius: '8px', objectFit: 'cover', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }} />
+                                <img src={item.imagem_url ?? undefined} alt="" style={{ width: '45px', height: '64px', borderRadius: '8px', objectFit: 'cover', boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }} />
                                 <div>
                                   <div style={{ fontWeight: 700, fontSize: '14px' }}>{item.titulo}</div>
                                   <div className="muted small">Qtd: {item.quantidade} • Unitário: R$ {item.preco_unitario}</div>

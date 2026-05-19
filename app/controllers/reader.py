@@ -845,16 +845,6 @@ def get_recommendations():
         "pages": pagination.pages
     }), 200
 
-    return jsonify([
-        {
-            "id": b.Livro.id,
-            "titulo": b.Livro.titulo,
-            "autor": b.Livro.autor,
-            "imagem_url": image_url(b.Livro.imagem),
-            "average_rating": float(round(b.average_rating, 1))
-        } for b in top_books
-    ]), 200
-
 @reader_bp.route("/feed", methods=["GET"])
 def feed():
     page = request.args.get('page', 1, type=int)

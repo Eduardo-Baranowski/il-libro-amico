@@ -4,10 +4,12 @@ import { Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
+import { getUserIdFromToken } from '../../lib/token'
 import { useAuth } from '../../app/AuthProvider'
 import { useCart } from '../../app/CartProvider'
 import type { Book, PaginatedResponse } from '../../lib/types'
 import { Pagination } from '../../app/components/Pagination'
+import { QueryStatus } from '../../app/components/ui/QueryStatus'
 
 const GENRES = [
   'Todos',
@@ -25,30 +27,38 @@ const GENRES = [
 
 export function StorePage() {
   const { auth } = useAuth()
+  const userId = getUserIdFromToken()
   const { addItem } = useCart()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [scope, setScope] = useState<'all' | 'books' | 'users' | 'editors'>('all')
   const [genre, setGenre] = useState('Todos')
 
+  const isSearchMode = search.length > 1
+
   const booksQ = useQuery({
     queryKey: ['storeBooks', page, genre],
     queryFn: () => api<PaginatedResponse<Book>>(`/reader/books?page=${page}&per_page=10${genre !== 'Todos' ? `&genero=${genre}` : ''}`),
-    enabled: search === ''
+    enabled: !isSearchMode,
   })
 
   const searchQ = useQuery({
     queryKey: ['globalSearch', search, genre],
     queryFn: () => api<{ books: Book[]; users: any[]; editors: any[] }>(`/reader/search?q=${search}${genre !== 'Todos' ? `&genero=${genre}` : ''}`),
-    enabled: search.length > 1
+    enabled: isSearchMode,
   })
+
+  const listLoading = isSearchMode ? searchQ.isLoading : booksQ.isLoading
+  const listError = isSearchMode ? searchQ.isError : booksQ.isError
+  const listErrorObj = isSearchMode ? searchQ.error : booksQ.error
+  const refetchList = () => (isSearchMode ? searchQ.refetch() : booksQ.refetch())
 
   const handleAddToCart = (book: Book) => {
     addItem({
       id: book.id,
       titulo: book.titulo,
       preco: parseFloat(String(book.preco).replace(',', '.')),
-      imagem_url: book.imagem_url,
+      imagem_url: book.imagem_url ?? null,
       quantidade: 1
     })
     toast.success(`${book.titulo} adicionado ao carrinho!`)
@@ -62,7 +72,7 @@ export function StorePage() {
   const ordersQ = useQuery({
     queryKey: ['recentOrders'],
     queryFn: () => api<PaginatedResponse<any>>('/reader/orders?page=1&per_page=3'),
-    enabled: !!auth.id && auth.role === 'leitor'
+    enabled: !!userId && auth.role === 'leitor'
   })
 
   return (
@@ -78,17 +88,23 @@ export function StorePage() {
         <div className="stack" style={{ gap: '24px' }}>
           <div className="row" style={{ gap: '16px' }}>
              <div style={{ flex: 1, position: 'relative' }}>
+                <label htmlFor="store-search" className="sr-only">
+                  Pesquisar títulos, autores ou editoras
+                </label>
                 <input
+                  id="store-search"
                   className="input"
                   placeholder="Pesquisar títulos, autores ou editoras..."
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                   style={{ height: '56px', borderRadius: '16px', paddingLeft: '48px', fontSize: '1.05rem', fontWeight: 600 }}
                 />
-                <span style={{ position: 'absolute', left: '18px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
+                <span style={{ position: 'absolute', left: '18px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} aria-hidden="true">🔍</span>
              </div>
              
-             <select 
+             <label htmlFor="store-genre" className="sr-only">Filtrar por gênero</label>
+             <select
+               id="store-genre"
                className="input" 
                value={genre} 
                onChange={(e) => { setGenre(e.target.value); setPage(1); }}
@@ -113,7 +129,17 @@ export function StorePage() {
         </div>
       </div>
 
-      <div className="stack" style={{ gap: '20px' }}>
+      <QueryStatus
+        isLoading={listLoading}
+        isError={listError}
+        error={listErrorObj as Error}
+        isEmpty={!listLoading && !listError && books.length === 0}
+        onRetry={() => refetchList()}
+        loadingLabel="Carregando catálogo"
+        emptyTitle="Nenhum livro encontrado"
+        emptyDescription="Ajuste os filtros ou tente outra busca."
+      >
+        <div className="stack" style={{ gap: '20px' }}>
         {books.map((book) => (
           <article key={book.id} className="store-row card responsive-book-row" style={{ padding: '24px', borderRadius: '24px' }}>
             <div className="request-thumb" style={{ borderRadius: '16px', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}>
@@ -121,7 +147,7 @@ export function StorePage() {
                 {book.imagem_url ? (
                   <img src={book.imagem_url} alt={book.titulo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <div className="feed-book-placeholder" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem' }}>📖</div>
+                  <div className="feed-book-placeholder" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem' }} aria-hidden="true">📖</div>
                 )}
               </Link>
             </div>
@@ -139,7 +165,7 @@ export function StorePage() {
                 <span className={`pill ${book.status_estoque === 'disponivel' ? 'success' : book.status_estoque === 'baixo' ? 'warning' : 'error'} mini-pill`} style={{ fontSize: '10px', fontWeight: 900 }}>
                   {book.status_estoque === 'disponivel' ? `EM ESTOQUE (${book.estoque})` : book.status_estoque === 'baixo' ? `ÚLTIMAS UNIDADES (${book.estoque})` : 'ESGOTADO'}
                 </span>
-                <span style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--text-main)' }}>R$ {book.preco}</span>
+                <span style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--text)' }}>R$ {book.preco}</span>
                 <Link to={`/editora/${book.editor_id}`} className="muted small link-hover" style={{ fontWeight: 700 }}>Editora: {book.editora}</Link>
               </div>
               
@@ -158,6 +184,7 @@ export function StorePage() {
                   disabled={book.estoque <= 0} 
                   onClick={() => handleAddToCart(book)}
                   style={{ width: '100%', height: '56px', fontSize: '1.1rem', fontWeight: 900, borderRadius: '16px' }}
+                  aria-label={book.estoque <= 0 ? `${book.titulo} esgotado` : `Comprar ${book.titulo}`}
                 >
                   {book.estoque <= 0 ? 'Esgotado' : 'Comprar'}
                 </button>
@@ -167,13 +194,8 @@ export function StorePage() {
             </div>
           </article>
         ))}
-
-        {books.length === 0 && !booksQ.isLoading && (
-          <div className="card" style={{ padding: '80px 24px', textAlign: 'center', borderRadius: '32px' }}>
-             <p className="muted" style={{ fontWeight: 600 }}>Nenhum livro encontrado com esses critérios.</p>
-          </div>
-        )}
-      </div>
+        </div>
+      </QueryStatus>
 
       {search.length <= 1 && (
         <Pagination 
@@ -188,7 +210,7 @@ export function StorePage() {
         <div style={{ marginTop: 60, borderTop: '1px solid var(--border)', paddingTop: '48px' }}>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
             <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900 }}>Pedidos Recentes</h3>
-            <Link to={`/perfil/${auth.id}`} className="link-hover" style={{ fontSize: '14px', fontWeight: 700 }}>Ver Histórico Completo →</Link>
+            <Link to={`/perfil/${userId}`} className="link-hover" style={{ fontSize: '14px', fontWeight: 700 }}>Ver Histórico Completo →</Link>
           </div>
           
           <div className="stack" style={{ gap: '12px' }}>
