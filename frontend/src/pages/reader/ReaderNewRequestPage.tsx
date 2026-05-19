@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 
 type EditorOption = { id: number; nome: string }
@@ -9,11 +9,19 @@ type EditorBookOption = { id: number; titulo: string; autor: string }
 export function ReaderNewRequestPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [editorId, setEditorId] = useState<number | ''>('')
   const [bookId, setBookId] = useState<number | ''>('')
   const [conteudo, setConteudo] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
+
+  useEffect(() => {
+    const e = searchParams.get('editor_id')
+    const l = searchParams.get('livro_id')
+    if (e) setEditorId(Number(e))
+    if (l) setBookId(Number(l))
+  }, [searchParams])
 
   const editorsQ = useQuery({
     queryKey: ['readerEditors'],

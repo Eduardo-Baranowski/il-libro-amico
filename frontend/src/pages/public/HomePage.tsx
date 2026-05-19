@@ -95,9 +95,29 @@ export function HomePage() {
               }}
             >
               <div className="feed-item-top">
-                <div className="feed-item-user" style={{ gap: '12px' }}>
-                  <span className="pill primary" style={{ fontWeight: 800, fontSize: '11px', letterSpacing: '0.05em' }}>{it.leitor.nome}</span>
-                  <span className="pill secondary" style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.8 }}>{statusLabels[it.status] || it.status}</span>
+                <div className="feed-item-user">
+                  <Link
+                    to={`/perfil/${it.leitor.id}`}
+                    className="feed-reader-avatar-link"
+                    aria-label={`Ver perfil de ${it.leitor.nome}`}
+                    title={`Ver perfil de ${it.leitor.nome}`}
+                  >
+                    {it.leitor.imagem_url ? (
+                      <img src={it.leitor.imagem_url} alt="" className="feed-reader-avatar" />
+                    ) : (
+                      <span className="feed-reader-avatar feed-reader-avatar--placeholder" aria-hidden="true">
+                        {it.leitor.nome.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                  </Link>
+                  <div className="feed-item-user-meta">
+                    <Link to={`/perfil/${it.leitor.id}`} className="feed-reader-name link-hover">
+                      {it.leitor.nome}
+                    </Link>
+                    <span className="pill secondary" style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.8 }}>
+                      {statusLabels[it.status] || it.status}
+                    </span>
+                  </div>
                 </div>
                 <div className="feed-item-date muted" style={{ fontSize: '12px', fontWeight: 600 }}>
                   {it.criado_em ? new Date(it.criado_em).toLocaleDateString() : ''}

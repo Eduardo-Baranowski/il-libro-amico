@@ -155,3 +155,43 @@ def test_reader_list_books_filters_by_genero(client, editor_user):
     titles = [item["titulo"] for item in resp.get_json()["items"]]
     assert "A" in titles
     assert "B" not in titles
+
+
+def test_reader_search_finds_user_by_name(client, app_ctx):
+    from app.models.user import User
+
+    db.session.add(
+        User(
+            nome="Brenda Silva",
+            email="brenda@test.local",
+            senha_hash="x",
+            papel="leitor",
+        )
+    )
+    db.session.commit()
+
+    resp = client.get("/reader/search?q=bren")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert any(u["nome"] == "Brenda Silva" for u in body["users"])
+
+
+def test_reader_search_by_author_with_accent(client, editor_user):
+    from app.models.livro import Livro
+
+    db.session.add(
+        Livro(
+            editor_id=editor_user.id,
+            titulo="O Homem Duplicado",
+            autor="José Saramago",
+            preco="28.00",
+            estoque=5,
+            genero="Romance",
+        )
+    )
+    db.session.commit()
+
+    resp = client.get("/reader/search?q=José")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert any(b["autor"] == "José Saramago" for b in body["books"])

@@ -25,6 +25,25 @@ export type BookLookupResponse = {
   fonte: string
 }
 
+export type SearchUserResult = {
+  id: number
+  nome: string
+  papel: string
+  imagem_url: string | null
+}
+
+export type SearchEditorResult = {
+  id: number
+  nome: string
+  imagem_url: string | null
+}
+
+export type GlobalSearchResponse = {
+  books: Book[]
+  users: SearchUserResult[]
+  editors: SearchEditorResult[]
+}
+
 export type LoginResponse = { 
   token_sessao: string; 
   papel: Role;
@@ -67,6 +86,13 @@ export type EditorRequest = {
   data_criacao: string | null
 }
 
+export type BookPublisher = {
+  id: number
+  nome: string
+  papel: string
+  imagem_url: string | null
+}
+
 export type BookPublic = {
   id: number
   editor_id: number
@@ -80,6 +106,17 @@ export type BookPublic = {
   imagem: string | null
   imagem_url?: string | null
   editora: string
+  publicador?: BookPublisher
+}
+
+export type BookDetails = BookPublic & {
+  editora_imagem_url?: string | null
+  publicador: BookPublisher
+  my_reading?: {
+    status: 'quero_ler' | 'lendo' | 'lido'
+    nota: number | null
+    comentario: string | null
+  } | null
 }
 
 /** Livro na listagem da loja (`/livros`) */

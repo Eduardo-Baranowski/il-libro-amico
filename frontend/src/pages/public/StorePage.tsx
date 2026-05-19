@@ -7,7 +7,7 @@ import { api } from '../../lib/api'
 import { getUserIdFromToken } from '../../lib/token'
 import { useAuth } from '../../app/AuthProvider'
 import { useCart } from '../../app/CartProvider'
-import type { Book, PaginatedResponse } from '../../lib/types'
+import type { Book, GlobalSearchResponse, PaginatedResponse } from '../../lib/types'
 import { Pagination } from '../../app/components/Pagination'
 import { QueryStatus } from '../../app/components/ui/QueryStatus'
 
@@ -25,13 +25,25 @@ const GENRES = [
   'Infantil'
 ]
 
+type SearchScope = 'all' | 'books' | 'users' | 'editors'
+
+function profilePath(papel: string, id: number) {
+  return papel === 'editor' ? `/editora/${id}` : `/perfil/${id}`
+}
+
+function roleLabel(papel: string) {
+  if (papel === 'editor') return 'Editora'
+  if (papel === 'admin') return 'Administrador'
+  return 'Leitor'
+}
+
 export function StorePage() {
   const { auth } = useAuth()
   const userId = getUserIdFromToken()
   const { addItem } = useCart()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
-  const [scope, setScope] = useState<'all' | 'books' | 'users' | 'editors'>('all')
+  const [scope, setScope] = useState<SearchScope>('all')
   const [genre, setGenre] = useState('Todos')
 
   const isSearchMode = search.length > 1
@@ -43,8 +55,12 @@ export function StorePage() {
   })
 
   const searchQ = useQuery({
-    queryKey: ['globalSearch', search, genre],
-    queryFn: () => api<{ books: Book[]; users: any[]; editors: any[] }>(`/reader/search?q=${search}${genre !== 'Todos' ? `&genero=${genre}` : ''}`),
+    queryKey: ['globalSearch', search, genre, scope],
+    queryFn: () => {
+      const params = new URLSearchParams({ q: search, limit: '25' })
+      if (genre !== 'Todos') params.set('genero', genre)
+      return api<GlobalSearchResponse>(`/reader/search?${params}`)
+    },
     enabled: isSearchMode,
   })
 
@@ -64,10 +80,36 @@ export function StorePage() {
     toast.success(`${book.titulo} adicionado ao carrinho!`)
   }
 
+  const searchBooks = searchQ.data?.books ?? []
+  const searchUsers = searchQ.data?.users ?? []
+  const searchEditors = searchQ.data?.editors ?? []
+
   const books = useMemo(() => {
-    if (search.length > 1) return searchQ.data?.books ?? []
-    return booksQ.data?.items ?? []
-  }, [search, searchQ.data, booksQ.data])
+    if (!isSearchMode) return booksQ.data?.items ?? []
+    if (scope === 'users' || scope === 'editors') return []
+    return searchBooks
+  }, [isSearchMode, scope, searchBooks, booksQ.data])
+
+  const users = useMemo(() => {
+    if (!isSearchMode) return []
+    if (scope === 'books' || scope === 'editors') return []
+    return searchUsers
+  }, [isSearchMode, scope, searchUsers])
+
+  const editors = useMemo(() => {
+    if (!isSearchMode) return []
+    if (scope === 'books' || scope === 'users') return []
+    return searchEditors
+  }, [isSearchMode, scope, searchEditors])
+
+  const resultCount = books.length + users.length + editors.length
+
+  const emptyTitle = useMemo(() => {
+    if (scope === 'users') return 'Nenhum usuário encontrado'
+    if (scope === 'editors') return 'Nenhuma editora encontrada'
+    if (scope === 'books') return 'Nenhum livro encontrado'
+    return 'Nenhum resultado encontrado'
+  }, [scope])
 
   const ordersQ = useQuery({
     queryKey: ['recentOrders'],
@@ -94,7 +136,7 @@ export function StorePage() {
                 <input
                   id="store-search"
                   className="input"
-                  placeholder="Pesquisar títulos, autores ou editoras..."
+                  placeholder="Pesquisar títulos, autores, usuários ou editoras..."
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                   style={{ height: '56px', borderRadius: '16px', paddingLeft: '48px', fontSize: '1.05rem', fontWeight: 600 }}
@@ -109,6 +151,7 @@ export function StorePage() {
                value={genre} 
                onChange={(e) => { setGenre(e.target.value); setPage(1); }}
                style={{ width: '200px', height: '56px', borderRadius: '16px', fontWeight: 800, cursor: 'pointer' }}
+               disabled={scope === 'users' || scope === 'editors'}
              >
                {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
              </select>
@@ -118,6 +161,7 @@ export function StorePage() {
             {(['all', 'books', 'users', 'editors'] as const).map((s) => (
               <button
                 key={s}
+                type="button"
                 className={`pill ${scope === s ? 'primary' : 'secondary'}`}
                 style={{ height: '36px', padding: '0 20px', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}
                 onClick={() => setScope(s)}
@@ -133,13 +177,107 @@ export function StorePage() {
         isLoading={listLoading}
         isError={listError}
         error={listErrorObj as Error}
-        isEmpty={!listLoading && !listError && books.length === 0}
+        isEmpty={!listLoading && !listError && resultCount === 0}
         onRetry={() => refetchList()}
         loadingLabel="Carregando catálogo"
-        emptyTitle="Nenhum livro encontrado"
+        emptyTitle={emptyTitle}
         emptyDescription="Ajuste os filtros ou tente outra busca."
       >
         <div className="stack" style={{ gap: '20px' }}>
+        {users.length > 0 && (
+          <>
+            {scope === 'all' ? (
+              <h2 className="muted" style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                Usuários ({users.length})
+              </h2>
+            ) : null}
+            {users.map((user) => (
+              <Link
+                key={`user-${user.id}`}
+                to={profilePath(user.papel, user.id)}
+                className="card store-row"
+                style={{
+                  padding: '20px 24px',
+                  borderRadius: '24px',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '20px',
+                }}
+              >
+                <div
+                  className="avatar-circle"
+                  style={{ width: 64, height: 64, flexShrink: 0, overflow: 'hidden' }}
+                >
+                  {user.imagem_url ? (
+                    <img src={user.imagem_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: '1.5rem', fontWeight: 900 }}>{user.nome.slice(0, 1).toUpperCase()}</span>
+                  )}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <strong style={{ display: 'block', fontSize: '1.25rem', fontWeight: 900, color: 'var(--primary)' }}>{user.nome}</strong>
+                  <span className="pill secondary mini-pill" style={{ marginTop: '8px', fontSize: '10px', fontWeight: 800 }}>
+                    {roleLabel(user.papel)}
+                  </span>
+                </div>
+                <span className="muted" style={{ fontWeight: 700 }}>Ver perfil →</span>
+              </Link>
+            ))}
+          </>
+        )}
+
+        {editors.length > 0 && (
+          <>
+            {scope === 'all' ? (
+              <h2 className="muted" style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', margin: users.length > 0 ? '16px 0 0' : 0 }}>
+                Editoras ({editors.length})
+              </h2>
+            ) : null}
+            {editors.map((editor) => (
+              <Link
+                key={`editor-${editor.id}`}
+                to={`/editora/${editor.id}`}
+                className="card store-row"
+                style={{
+                  padding: '20px 24px',
+                  borderRadius: '24px',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '20px',
+                }}
+              >
+                <div
+                  className="avatar-circle"
+                  style={{ width: 64, height: 64, flexShrink: 0, overflow: 'hidden' }}
+                >
+                  {editor.imagem_url ? (
+                    <img src={editor.imagem_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: '1.5rem', fontWeight: 900 }}>{editor.nome.slice(0, 1).toUpperCase()}</span>
+                  )}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <strong style={{ display: 'block', fontSize: '1.25rem', fontWeight: 900, color: 'var(--primary)' }}>{editor.nome}</strong>
+                  <span className="pill secondary mini-pill" style={{ marginTop: '8px', fontSize: '10px', fontWeight: 800 }}>
+                    Editora
+                  </span>
+                </div>
+                <span className="muted" style={{ fontWeight: 700 }}>Ver catálogo →</span>
+              </Link>
+            ))}
+          </>
+        )}
+
+        {books.length > 0 && scope !== 'users' && scope !== 'editors' && scope === 'all' ? (
+          <h2 className="muted" style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', margin: (users.length > 0 || editors.length > 0) ? '16px 0 0' : 0 }}>
+            Livros ({books.length})
+          </h2>
+        ) : null}
+
         {books.map((book) => (
           <article key={book.id} className="store-row card responsive-book-row" style={{ padding: '24px', borderRadius: '24px' }}>
             <div className="request-thumb" style={{ borderRadius: '16px', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}>

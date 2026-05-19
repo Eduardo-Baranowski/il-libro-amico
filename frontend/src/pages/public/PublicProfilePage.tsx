@@ -5,8 +5,9 @@ import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
 import { getUserIdFromToken } from '../../lib/token'
+import { useAuth } from '../../app/AuthProvider'
 import { StarRating } from '../../app/components/StarRating'
-import type { BookPublic, PaginatedResponse, Order } from '../../lib/types'
+import type { BookPublic, PaginatedResponse, Order, RelationStatus } from '../../lib/types'
 
 interface ProfileData {
   user: {
@@ -44,10 +45,12 @@ interface Reading {
 
 export function PublicProfilePage() {
   const { userId } = useParams()
+  const { auth } = useAuth()
   const meId = getUserIdFromToken()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const isOwnProfile = String(meId) === String(userId)
+  const canInteract = Boolean(auth.token && userId && !isOwnProfile)
   
   const [orderPage, setOrderPage] = useState(1)
   const [expandedOrders, setExpandedOrders] = useState<Record<number, boolean>>({})
@@ -87,12 +90,38 @@ export function PublicProfilePage() {
     }
   })
 
+  const relationQ = useQuery({
+    queryKey: ['relation', userId],
+    enabled: canInteract,
+    queryFn: () => api<RelationStatus>(`/reader/users/${userId}/relation`),
+  })
+
+  const followM = useMutation({
+    mutationFn: (follow: boolean) =>
+      api(`/reader/users/${userId}/follow`, { method: follow ? 'POST' : 'DELETE' }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['relation', userId] })
+      await qc.invalidateQueries({ queryKey: ['publicProfile', userId] })
+      toast.success('Atualizado!')
+    },
+    onError: (err: Error) => toast.error(err.message || 'Erro ao seguir'),
+  })
+
+  const connectM = useMutation({
+    mutationFn: (connect: boolean) =>
+      api(`/reader/users/${userId}/connect`, { method: connect ? 'POST' : 'DELETE' }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['relation', userId] })
+      toast.success('Atualizado!')
+    },
+    onError: (err: Error) => toast.error(err.message || 'Erro na conexão'),
+  })
+
   // Intersection Observer for Infinite Scroll
   useEffect(() => {
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-          console.log('Fetching next page of readings...')
           fetchNextPage()
         }
       },
@@ -124,8 +153,53 @@ export function PublicProfilePage() {
             <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900 }}>{p.user.nome}</h2>
             <p className="muted small" style={{ fontWeight: 700, textTransform: 'uppercase', marginTop: '4px' }}>{p.user.papel}</p>
             
-            {isOwnProfile && (
+            {isOwnProfile ? (
                <Link to="/configuracoes" className="btn secondary small" style={{ marginTop: '20px', width: '100%', borderRadius: '12px' }}>Editar Perfil</Link>
+            ) : auth.token ? (
+              <div className="stack" style={{ marginTop: '20px', gap: '10px' }}>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ width: '100%', borderRadius: '12px', fontWeight: 800 }}
+                  onClick={() => navigate(`/mensagens/${userId}`)}
+                >
+                  💬 Enviar mensagem
+                </button>
+                {relationQ.data ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      style={{ width: '100%', borderRadius: '12px', fontWeight: 700 }}
+                      disabled={followM.isPending}
+                      onClick={() => followM.mutate(!relationQ.data.following)}
+                    >
+                      {relationQ.data.following ? '✓ Seguindo' : '+ Seguir'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      style={{ width: '100%', borderRadius: '12px', fontWeight: 700 }}
+                      disabled={connectM.isPending || relationQ.data.outgoing_pending || relationQ.data.incoming_pending}
+                      onClick={() => connectM.mutate(!relationQ.data.is_friend)}
+                    >
+                      {relationQ.data.is_friend
+                        ? '✓ Conectados'
+                        : relationQ.data.outgoing_pending
+                          ? 'Convite enviado'
+                          : relationQ.data.incoming_pending
+                            ? 'Convite recebido'
+                            : '+ Conectar'}
+                    </button>
+                  </>
+                ) : relationQ.isLoading ? (
+                  <p className="muted small" style={{ margin: 0 }}>Carregando…</p>
+                ) : null}
+              </div>
+            ) : (
+              <Link to="/entrar" className="btn secondary small" style={{ marginTop: '20px', width: '100%', borderRadius: '12px' }}>
+                Entrar para interagir
+              </Link>
             )}
           </div>
 

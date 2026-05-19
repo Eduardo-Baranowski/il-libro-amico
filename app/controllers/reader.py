@@ -523,6 +523,7 @@ def search():
         description: Resultado da busca global
     """
     q = (request.args.get("q") or "").strip()
+    genero = (request.args.get("genero") or "").strip()
     try:
         limit = int(request.args.get("limit", "8"))
     except ValueError:
@@ -532,10 +533,9 @@ def search():
     if not q and not genero:
         return jsonify({"books": [], "users": [], "editors": []}), 200
 
-    like = f"%{q}%"
-    
     book_query = Livro.query
     if q:
+        like = f"%{q}%"
         book_query = book_query.join(User, Livro.editor_id == User.id).filter(
             db.or_(
                 Livro.titulo.ilike(like),
@@ -544,24 +544,28 @@ def search():
                 User.nome.ilike(like),
             )
         )
-    
+
     if genero:
-        book_query = book_query.filter_by(genero=genero)
-    
+        book_query = book_query.filter(Livro.genero.ilike(genero))
+
     books = book_query.order_by(Livro.titulo.asc()).limit(limit).all()
 
-    users = (
-        User.query.filter(User.nome.ilike(like))
-        .order_by(User.nome.asc())
-        .limit(limit)
-        .all()
-    )
-    editors = (
-        User.query.filter(User.papel == "editor", User.nome.ilike(like))
-        .order_by(User.nome.asc())
-        .limit(limit)
-        .all()
-    )
+    users: list[User] = []
+    editors: list[User] = []
+    if q:
+        like = f"%{q}%"
+        users = (
+            User.query.filter(User.nome.ilike(like), User.papel != "editor")
+            .order_by(User.nome.asc())
+            .limit(limit)
+            .all()
+        )
+        editors = (
+            User.query.filter(User.papel == "editor", User.nome.ilike(like))
+            .order_by(User.nome.asc())
+            .limit(limit)
+            .all()
+        )
 
     return jsonify(
         {
@@ -658,6 +662,12 @@ def get_book_details(id):
         "imagem_url": image_url(b.imagem),
         "editora": b.editor.nome,
         "editora_imagem_url": image_url(b.editor.imagem),
+        "publicador": {
+            "id": b.editor.id,
+            "nome": b.editor.nome,
+            "papel": b.editor.papel,
+            "imagem_url": image_url(b.editor.imagem),
+        },
         "data_cadastro": b.data_cadastro.isoformat(),
         "my_reading": my_reading
     }), 200

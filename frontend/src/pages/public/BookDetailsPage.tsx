@@ -4,16 +4,18 @@ import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 
 import { api } from '../../lib/api'
+import { getUserIdFromToken } from '../../lib/token'
 import { useAuth } from '../../app/AuthProvider'
 import { useCart } from '../../app/CartProvider'
 import { StarRating } from '../../app/components/StarRating'
-import type { BookPublic } from '../../lib/types'
+import type { BookDetails } from '../../lib/types'
 
 export function BookDetailsPage() {
   const { bookId } = useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { auth } = useAuth()
+  const meId = getUserIdFromToken()
   const { addItem } = useCart()
   const [qtd, setQtd] = useState(1)
   
@@ -24,12 +26,7 @@ export function BookDetailsPage() {
   const q = useQuery({
     queryKey: ['bookDetails', bookId],
     enabled: Boolean(bookId),
-    queryFn: () => api<BookPublic & { 
-      descricao?: string | null; 
-      editora: string; 
-      editora_imagem_url?: string | null;
-      my_reading?: { status: 'quero_ler' | 'lendo' | 'lido'; nota: number | null; comentario: string | null } | null
-    }>(`/reader/books/${bookId}`),
+    queryFn: () => api<BookDetails>(`/reader/books/${bookId}`),
   })
 
   // Sincronizar estado com dados do banco ao carregar
@@ -66,6 +63,14 @@ export function BookDetailsPage() {
 
   const b = q.data
   const isLeitor = auth.role === 'leitor'
+  const pub = b.publicador ?? {
+    id: b.editor_id,
+    nome: b.editora,
+    papel: 'editor',
+    imagem_url: b.editora_imagem_url ?? null,
+  }
+  const canContactPublisher = Boolean(auth.token && String(meId) !== String(pub.id))
+  const publisherProfilePath = pub.papel === 'editor' ? `/editora/${pub.id}` : `/perfil/${pub.id}`
 
   const handleAddToCart = (checkout: boolean = false) => {
     addItem({
@@ -170,14 +175,64 @@ export function BookDetailsPage() {
               <p className="muted" style={{ fontSize: '1.4rem', fontWeight: 500 }}>por <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{b.autor}</span></p>
             </div>
 
-            <div className="row" style={{ gap: '16px', alignItems: 'center' }}>
-              <Link to={`/editora/${b.editor_id}`} className="pill" style={{ textDecoration: 'none', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '50px' }}>
-                <div className="avatar-circle" style={{ width: '28px', height: '28px', border: 'none', background: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                  {b.editora_imagem_url ? <img src={b.editora_imagem_url} alt={b.editora} style={{ width: '100%', height: '100%', borderRadius: '50%' }} /> : <span>🏢</span>}
-                </div>
-                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{b.editora}</span>
-              </Link>
+            <div className="card" style={{ padding: '20px 24px', borderRadius: '20px', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+              <p className="muted small" style={{ margin: '0 0 12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {pub.papel === 'leitor' ? 'Indicado por' : 'Publicado por'}
+              </p>
+              <div className="row" style={{ gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <Link
+                  to={publisherProfilePath}
+                  className="pill"
+                  style={{ textDecoration: 'none', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '50px' }}
+                >
+                  <div className="avatar-circle" style={{ width: '28px', height: '28px', border: 'none', background: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                    {pub.imagem_url ? (
+                      <img src={pub.imagem_url} alt={pub.nome} style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
+                    ) : (
+                      <span>{pub.papel === 'editor' ? '🏢' : pub.nome.slice(0, 1).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{pub.nome}</span>
+                  <span className="pill secondary mini-pill" style={{ fontSize: '9px', fontWeight: 800 }}>
+                    {pub.papel === 'editor' ? 'Editora' : pub.papel === 'leitor' ? 'Leitor' : pub.papel}
+                  </span>
+                </Link>
+                {canContactPublisher ? (
+                  <div className="row" style={{ gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ height: '44px', borderRadius: '12px', fontWeight: 800, padding: '0 20px' }}
+                      onClick={() => navigate(`/mensagens/${pub.id}`)}
+                    >
+                      💬 Enviar mensagem
+                    </button>
+                    {isLeitor && pub.papel === 'editor' ? (
+                      <Link
+                        to={`/leitor/nova-solicitacao?editor_id=${b.editor_id}&livro_id=${b.id}`}
+                        className="btn secondary"
+                        style={{
+                          height: '44px',
+                          borderRadius: '12px',
+                          fontWeight: 700,
+                          padding: '0 20px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        📬 Solicitar à editora
+                      </Link>
+                    ) : null}
+                  </div>
+                ) : !auth.token ? (
+                  <Link to="/entrar" className="btn secondary small" style={{ borderRadius: '12px', textDecoration: 'none' }}>
+                    Entrar para enviar mensagem
+                  </Link>
+                ) : null}
+              </div>
             </div>
+
 
             <div style={{ padding: '32px', background: 'var(--surface-2)', borderRadius: '24px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: 'var(--primary)' }} />
