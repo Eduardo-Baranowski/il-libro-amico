@@ -33,6 +33,22 @@ Após atualizar o repositório (ex.: campo `genero` em `Livro`), aplique as migr
 flask db upgrade
 ```
 
+Para substituir livros fictícios por um catálogo de obras reais (Machado de Assis, Clarice Lispector, Tolkien, etc.):
+
+```bash
+python scripts/reseed_livros.py
+```
+
+O script remove títulos com padrões como `Autor Fictício N` / `Romance N: …`, insere o catálogo em `app/seed/catalog.py` e recria leituras de demonstração para o feed da comunidade.
+
+Para baixar capas dos livros (Open Library) e gravar em `app/static/uploads/books/`:
+
+```bash
+python scripts/fetch_book_covers.py
+```
+
+Use `--force` para substituir capas já existentes.
+
 ## Execução
 
 ```bash
