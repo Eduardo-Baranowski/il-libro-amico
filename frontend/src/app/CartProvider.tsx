@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, useMemo } from 'react'
 
+import { useAuth } from './AuthProvider'
+
 export interface CartItem {
   id: number
   titulo: string
@@ -21,6 +23,8 @@ interface CartContextValue {
 const CartContext = createContext<CartContextValue | null>(null)
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { auth } = useAuth()
+
   // Carregamento inicial com higienização
   const [items, setItems] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('cart')
@@ -46,6 +50,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem('cart', JSON.stringify(items))
   }, [items])
+
+  // Carrinho é exclusivo do perfil leitor
+  useEffect(() => {
+    if (auth.role && auth.role !== 'leitor') {
+      setItems([])
+    }
+  }, [auth.role])
 
   // Cálculos de totais
   const totalItems = useMemo(() => {

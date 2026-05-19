@@ -93,9 +93,11 @@ export function Layout() {
               </>
             ) : (
               <>
-                <Link to="/carrinho" className="btn secondary" style={{ padding: '8px 12px', borderRadius: '12px', position: 'relative' }}>
-                  🛒 {totalItems > 0 && <span style={{ background: 'var(--primary)', color: '#fff', borderRadius: '99px', padding: '0 6px', fontSize: '11px', position: 'absolute', top: '-5px', right: '-5px', border: '2px solid #fff' }}>{totalItems}</span>}
-                </Link>
+                {auth.role === 'leitor' ? (
+                  <Link to="/carrinho" className="btn secondary" style={{ padding: '8px 12px', borderRadius: '12px', position: 'relative' }}>
+                    🛒 {totalItems > 0 && <span style={{ background: 'var(--primary)', color: '#fff', borderRadius: '99px', padding: '0 6px', fontSize: '11px', position: 'absolute', top: '-5px', right: '-5px', border: '2px solid #fff' }}>{totalItems}</span>}
+                  </Link>
+                ) : null}
 
                 <div style={{ position: 'relative' }} ref={notifRef}>
                   <button

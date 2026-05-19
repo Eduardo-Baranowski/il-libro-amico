@@ -124,7 +124,7 @@ Endpoints paginados incluem, entre outros: `GET /reader/books`, `GET /reader/rec
 | POST/GET | `/reader/readings` | JWT leitor | Registrar / listar leituras; paginado |
 | DELETE | `/reader/readings/<id>` | JWT leitor | Remover leitura própria |
 | POST/GET | `/reader/purchases` | JWT leitor | Compra / histórico |
-| POST/GET | `/reader/orders` | JWT | Pedido multi-item / listagem |
+| POST/GET | `/reader/orders` | JWT leitor | Pedido multi-item / listagem (checkout) |
 | PUT/DELETE | `/reader/profile` | JWT | Atualizar / excluir conta |
 | POST | `/reader/profile/photo` | JWT | Foto de perfil |
 | PUT | `/reader/profile/password` | JWT | Alterar senha |

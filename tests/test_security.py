@@ -19,3 +19,18 @@ def test_reader_route_forbids_editor(client, editor_token, auth_header):
     resp = client.get("/reader/requests", headers=auth_header(editor_token))
     assert resp.status_code == 403
     assert resp.get_json()["message"] == "Acesso Negado"
+
+
+def test_editor_cannot_create_order(client, editor_token, editor_book, auth_header):
+    resp = client.post(
+        "/reader/orders",
+        headers=auth_header(editor_token),
+        json={
+            "items": [{"livro_id": editor_book.id, "quantidade": 1}],
+            "rua": "Rua Teste",
+            "numero": "1",
+            "cep": "00000-000",
+        },
+    )
+    assert resp.status_code == 403
+    assert resp.get_json()["message"] == "Acesso Negado"

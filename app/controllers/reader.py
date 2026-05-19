@@ -1110,6 +1110,7 @@ def list_conversations():
 
 @reader_bp.route('/orders', methods=['POST'])
 @jwt_required()
+@verificar_leitor
 def create_order():
     current_id = int(get_jwt_identity())
     data = request.get_json()

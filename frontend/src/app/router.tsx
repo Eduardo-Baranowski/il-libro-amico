@@ -141,7 +141,7 @@ export const router = createBrowserRouter([
       {
         path: '/carrinho',
         element: (
-          <RequireAuth>
+          <RequireAuth role="leitor">
             <CartPage />
           </RequireAuth>
         ),
@@ -149,7 +149,7 @@ export const router = createBrowserRouter([
       {
         path: '/checkout',
         element: (
-          <RequireAuth>
+          <RequireAuth role="leitor">
             <CheckoutPage />
           </RequireAuth>
         ),

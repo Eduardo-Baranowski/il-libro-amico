@@ -188,8 +188,34 @@ export function StorePage() {
                 >
                   {book.estoque <= 0 ? 'Esgotado' : 'Comprar'}
                 </button>
+              ) : auth.token ? (
+                <button
+                  className="btn secondary"
+                  type="button"
+                  disabled
+                  style={{ width: '100%', height: '56px', borderRadius: '16px', fontWeight: 800, fontSize: '0.85rem' }}
+                  title="Compras são feitas com perfil de leitor"
+                >
+                  Apenas perfil leitor
+                </button>
               ) : (
-                <button className="btn secondary" type="button" disabled style={{ width: '100%', height: '56px', borderRadius: '16px', fontWeight: 800, fontSize: '0.9rem' }}>Entrar para comprar</button>
+                <Link
+                  to="/entrar"
+                  className="btn secondary"
+                  style={{
+                    width: '100%',
+                    height: '56px',
+                    borderRadius: '16px',
+                    fontWeight: 800,
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textDecoration: 'none',
+                  }}
+                >
+                  Entrar para comprar
+                </Link>
               )}
             </div>
           </article>
