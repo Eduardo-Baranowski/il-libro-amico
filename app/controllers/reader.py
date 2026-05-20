@@ -26,6 +26,17 @@ def verificar_leitor(f):
         return f(*args, **kwargs)
     return decorated_function
 
+
+def _parse_positive_int(value, field_name: str = "quantidade"):
+    """Retorna (int, None) ou (None, mensagem_de_erro)."""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None, f"{field_name} inválida"
+    if n <= 0:
+        return None, f"{field_name} deve ser maior que zero"
+    return n, None
+
 @reader_bp.route('/editors', methods=['GET'])
 def list_editors():
     """
@@ -1123,8 +1134,8 @@ def list_conversations():
 @verificar_leitor
 def create_order():
     current_id = int(get_jwt_identity())
-    data = request.get_json()
-    
+    data = request.get_json() or {}
+
     items_data = data.get('items', [])
     if not items_data:
         return jsonify({"message": "Carrinho vazio"}), 400
@@ -1148,26 +1159,37 @@ def create_order():
         total_acumulado = Decimal("0.00")
         
         for item in items_data:
-            livro = Livro.query.get(item['livro_id'])
+            livro_id = item.get("livro_id")
+            if livro_id is None:
+                db.session.rollback()
+                return jsonify({"message": "livro_id é obrigatório em cada item"}), 400
+
+            quantidade, qty_err = _parse_positive_int(item.get("quantidade"))
+            if qty_err:
+                db.session.rollback()
+                return jsonify({"message": qty_err}), 400
+
+            livro = Livro.query.get(livro_id)
             if not livro:
                 db.session.rollback()
-                return jsonify({"message": f"Livro ID {item['livro_id']} não encontrado"}), 400
-            
-            if livro.estoque < item['quantidade']:
+                return jsonify({"message": f"Livro ID {livro_id} não encontrado"}), 400
+
+            if livro.estoque < quantidade:
                 db.session.rollback()
-                return jsonify({"message": f"O livro '{livro.titulo}' possui apenas {livro.estoque} unidades em estoque."}), 400
-            
-            # Subtrair estoque
-            livro.estoque -= item['quantidade']
-            
+                return jsonify({
+                    "message": f"O livro '{livro.titulo}' possui apenas {livro.estoque} unidades em estoque."
+                }), 400
+
+            livro.estoque -= quantidade
+
             preco_unit = livro.preco
-            subtotal = preco_unit * item['quantidade']
+            subtotal = preco_unit * quantidade
             total_acumulado += subtotal
-            
+
             item_obj = ItemPedido(
                 pedido_id=novo_pedido.id,
                 livro_id=livro.id,
-                quantidade=item['quantidade'],
+                quantidade=quantidade,
                 preco_unitario=preco_unit
             )
             db.session.add(item_obj)
@@ -1181,9 +1203,10 @@ def create_order():
             "total": str(total_acumulado)
         }), 201
         
-    except Exception as e:
+    except Exception:
         db.session.rollback()
-        return jsonify({"message": str(e)}), 500
+        current_app.logger.exception("Falha ao processar pedido leitor_id=%s", current_id)
+        return jsonify({"message": "Erro interno ao processar pedido"}), 500
 
 @reader_bp.route('/orders', methods=['GET'])
 @jwt_required()

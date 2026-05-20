@@ -9,6 +9,8 @@ from flask_jwt_extended import JWTManager
 from flasgger import Swagger
 from flask_cors import CORS
 
+from .config_security import load_jwt_secret_key, load_secret_key
+
 db = SQLAlchemy()
 migrate = Migrate()
 bcrypt = Bcrypt()
@@ -34,10 +36,9 @@ def create_app():
         db_uri = f"sqlite:///{_db_file.as_posix()}"
     app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["SECRET_KEY"] = os.environ.get(
-        "SECRET_KEY", os.environ.get("JWT_SECRET_KEY", "dev-only-change-me-use-env")
-    )
-    app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", app.config["SECRET_KEY"])
+    jwt_key = load_jwt_secret_key()
+    app.config["JWT_SECRET_KEY"] = jwt_key
+    app.config["SECRET_KEY"] = load_secret_key(jwt_key)
 
     # Configuração do Swagger
     app.config['SWAGGER'] = {

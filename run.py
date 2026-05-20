@@ -35,5 +35,5 @@ def criar_admin_inicial():
 
 if __name__ == "__main__":
     criar_admin_inicial()
-    debug = os.environ.get("FLASK_DEBUG", "1") not in ("0", "false", "False")
+    debug = os.environ.get("FLASK_DEBUG", "0") not in ("0", "false", "False")
     app.run(debug=debug, host="127.0.0.1", port=int(os.environ.get("PORT", "5000")))
