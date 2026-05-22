@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../AuthProvider'
 import { useCart } from '../CartProvider'
 import { api } from '../../lib/api'
+import { useDocumentVisible } from '../../hooks/useDocumentVisible'
+import { useReaderEvents } from '../../hooks/useReaderEvents'
 import type { NotificationsResponse } from '../../lib/types'
 
 export function Layout() {
@@ -16,6 +18,9 @@ export function Layout() {
   const [openUserMenu, setOpenUserMenu] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
+  const tabVisible = useDocumentVisible()
+
+  useReaderEvents(Boolean(auth.token))
 
   // Reset menus on route or auth change
   useEffect(() => {
@@ -40,7 +45,7 @@ export function Layout() {
     queryKey: ['notifications'],
     enabled: Boolean(auth.token),
     queryFn: () => api<NotificationsResponse>('/reader/notifications'),
-    refetchInterval: auth.token ? 4000 : false,
+    refetchInterval: auth.token && tabVisible ? 60_000 : false,
   })
   const acceptFriendM = useMutation({
     mutationFn: (id: number) => api<{ message: string }>(`/reader/friendships/${id}/accept`, { method: 'POST' }),

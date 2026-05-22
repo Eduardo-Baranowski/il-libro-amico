@@ -16,6 +16,9 @@ from ..utils import image_url, save_image
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from ..realtime import publish
+from ..realtime.stream import sse_response
+
 reader_bp = Blueprint('reader', __name__)
 
 def verificar_leitor(f):
@@ -54,6 +57,22 @@ def list_editors():
 
 @reader_bp.route('/users/<int:user_id>', methods=['GET'])
 def get_public_user(user_id):
+    """
+    Perfil público resumido de um usuário
+    ---
+    tags:
+      - Público
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: id, nome, papel, imagem_url
+      404:
+        description: Usuário não encontrado
+    """
     user = User.query.get_or_404(user_id)
     return jsonify(
         {
@@ -67,6 +86,22 @@ def get_public_user(user_id):
 
 @reader_bp.route('/users/<int:user_id>/visit', methods=['GET'])
 def get_public_user_visit(user_id):
+    """
+    Perfil público completo (visit) com estatísticas e timeline
+    ---
+    tags:
+      - Público
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: user, stats, featured, reading_log, specializations, affiliations
+      404:
+        description: Usuário não encontrado
+    """
     user = User.query.get_or_404(user_id)
     is_editor = user.papel == "editor"
 
@@ -183,6 +218,24 @@ def get_public_user_visit(user_id):
 @reader_bp.route('/users/<int:user_id>/relation', methods=['GET'])
 @jwt_required()
 def relation_status(user_id):
+    """
+    Status de relação social com um usuário
+    ---
+    tags:
+      - Social
+    security:
+      - Bearer: []
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: following, is_friend, outgoing_pending, incoming_pending
+      401:
+        description: Não autenticado
+    """
     current_id = int(get_jwt_identity())
     if current_id == user_id:
         return jsonify({"following": False, "is_friend": False, "outgoing_pending": False, "incoming_pending": False}), 200
@@ -217,6 +270,28 @@ def relation_status(user_id):
 @reader_bp.route('/users/<int:user_id>/follow', methods=['POST'])
 @jwt_required()
 def follow_user(user_id):
+    """
+    Seguir um usuário
+    ---
+    tags:
+      - Social
+    security:
+      - Bearer: []
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      201:
+        description: Passou a seguir o perfil
+      200:
+        description: Já seguia o perfil
+      404:
+        description: Usuário não encontrado
+      400:
+        description: Operação inválida
+    """
     current_id = int(get_jwt_identity())
     if current_id == user_id:
         return jsonify({"message": "Operação inválida"}), 400
@@ -234,6 +309,24 @@ def follow_user(user_id):
 @reader_bp.route('/users/<int:user_id>/follow', methods=['DELETE'])
 @jwt_required()
 def unfollow_user(user_id):
+    """
+    Deixar de seguir um usuário
+    ---
+    tags:
+      - Social
+    security:
+      - Bearer: []
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Deixou de seguir
+      404:
+        description: Não seguia o perfil
+    """
     current_id = int(get_jwt_identity())
     row = Follow.query.filter_by(follower_id=current_id, following_id=user_id).first()
     if not row:
@@ -246,6 +339,28 @@ def unfollow_user(user_id):
 @reader_bp.route('/users/<int:user_id>/connect', methods=['POST'])
 @jwt_required()
 def connect_user(user_id):
+    """
+    Enviar ou aceitar convite de conexão (amizade)
+    ---
+    tags:
+      - Social
+    security:
+      - Bearer: []
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      201:
+        description: Convite enviado
+      200:
+        description: Conexão já existia, convite pendente ou conexão aceita
+      404:
+        description: Usuário não encontrado
+      400:
+        description: Operação inválida
+    """
     current_id = int(get_jwt_identity())
     if current_id == user_id:
         return jsonify({"message": "Operação inválida"}), 400
@@ -267,6 +382,7 @@ def connect_user(user_id):
     if incoming:
         incoming.status = "accepted"
         db.session.commit()
+        publish(user_id, "notification", {"kind": "friend_accepted", "addressee_id": current_id})
         return jsonify({"message": "Conexão aceita"}), 200
 
     outgoing = Friendship.query.filter_by(requester_id=current_id, addressee_id=user_id, status="pending").first()
@@ -275,12 +391,31 @@ def connect_user(user_id):
 
     db.session.add(Friendship(requester_id=current_id, addressee_id=user_id, status="pending"))
     db.session.commit()
+    publish(user_id, "notification", {"kind": "friend_request", "requester_id": current_id})
     return jsonify({"message": "Convite de conexão enviado"}), 201
 
 
 @reader_bp.route('/users/<int:user_id>/connect', methods=['DELETE'])
 @jwt_required()
 def disconnect_user(user_id):
+    """
+    Remover conexão de amizade
+    ---
+    tags:
+      - Social
+    security:
+      - Bearer: []
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Conexão removida
+      404:
+        description: Sem conexão ativa
+    """
     current_id = int(get_jwt_identity())
     row = Friendship.query.filter(
         db.or_(
@@ -298,18 +433,55 @@ def disconnect_user(user_id):
 @reader_bp.route('/friendships/<int:friendship_id>/accept', methods=['POST'])
 @jwt_required()
 def accept_friendship(friendship_id):
+    """
+    Aceitar convite de conexão
+    ---
+    tags:
+      - Social
+    security:
+      - Bearer: []
+    parameters:
+      - name: friendship_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Solicitação aceita
+      404:
+        description: Solicitação não encontrada
+    """
     current_id = int(get_jwt_identity())
     row = Friendship.query.filter_by(id=friendship_id, addressee_id=current_id, status="pending").first()
     if not row:
         return jsonify({"message": "Solicitação não encontrada"}), 404
     row.status = "accepted"
     db.session.commit()
+    publish(row.requester_id, "notification", {"kind": "friend_accepted", "addressee_id": current_id})
     return jsonify({"message": "Solicitação aceita"}), 200
 
 
 @reader_bp.route('/friendships/<int:friendship_id>/reject', methods=['POST'])
 @jwt_required()
 def reject_friendship(friendship_id):
+    """
+    Recusar convite de conexão
+    ---
+    tags:
+      - Social
+    security:
+      - Bearer: []
+    parameters:
+      - name: friendship_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Solicitação recusada
+      404:
+        description: Solicitação não encontrada
+    """
     current_id = int(get_jwt_identity())
     row = Friendship.query.filter_by(id=friendship_id, addressee_id=current_id, status="pending").first()
     if not row:
@@ -322,6 +494,19 @@ def reject_friendship(friendship_id):
 @reader_bp.route('/notifications', methods=['GET'])
 @jwt_required()
 def notifications():
+    """
+    Notificações do leitor (convites e mensagens não lidas)
+    ---
+    tags:
+      - Mensagens
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Convites de conexão pendentes e resumo de mensagens não lidas
+      401:
+        description: Não autenticado
+    """
     current_id = int(get_jwt_identity())
     friend_requests = (
         Friendship.query.filter_by(addressee_id=current_id, status="pending")
@@ -388,6 +573,38 @@ def notifications():
 @reader_bp.route('/users/<int:user_id>/messages', methods=['GET'])
 @jwt_required()
 def list_messages_with_user(user_id):
+    """
+    Listar mensagens com um usuário (sync incremental)
+    ---
+    tags:
+      - Mensagens
+    security:
+      - Bearer: []
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+      - name: after_id
+        in: query
+        type: integer
+        required: false
+        default: 0
+        description: Retorna somente mensagens com id maior que after_id
+      - name: limit
+        in: query
+        type: integer
+        required: false
+        default: 80
+        description: Máximo de mensagens (10–200)
+    responses:
+      200:
+        description: Lista de mensagens; marca como lidas as recebidas pelo usuário autenticado
+      404:
+        description: Usuário não encontrado
+      401:
+        description: Não autenticado
+    """
     current_id = int(get_jwt_identity())
     _ = User.query.get_or_404(user_id)
     try:
@@ -434,6 +651,38 @@ def list_messages_with_user(user_id):
 @reader_bp.route('/users/<int:user_id>/messages', methods=['POST'])
 @jwt_required()
 def send_message_to_user(user_id):
+    """
+    Enviar mensagem para um usuário
+    ---
+    tags:
+      - Mensagens
+    security:
+      - Bearer: []
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - conteudo
+          properties:
+            conteudo:
+              type: string
+    responses:
+      201:
+        description: Mensagem enviada (dispara evento SSE para o destinatário)
+      400:
+        description: Conteúdo inválido ou operação inválida
+      404:
+        description: Usuário não encontrado
+      401:
+        description: Não autenticado
+    """
     current_id = int(get_jwt_identity())
     if current_id == user_id:
         return jsonify({"message": "Operação inválida"}), 400
@@ -445,7 +694,34 @@ def send_message_to_user(user_id):
     msg = Message(sender_id=current_id, receiver_id=user_id, conteudo=conteudo)
     db.session.add(msg)
     db.session.commit()
+    publish(
+        user_id,
+        "message",
+        {"message_id": msg.id, "sender_id": current_id, "receiver_id": user_id},
+    )
     return jsonify({"message": "Mensagem enviada", "id": msg.id}), 201
+
+
+@reader_bp.route("/events", methods=["GET"])
+@jwt_required()
+def reader_events():
+    """
+    Stream SSE de eventos em tempo real
+    ---
+    tags:
+      - Mensagens
+    security:
+      - Bearer: []
+    produces:
+      - text/event-stream
+    responses:
+      200:
+        description: Stream Server-Sent Events (eventos message e notification; heartbeat a cada 25s)
+      401:
+        description: Não autenticado
+    """
+    current_id = int(get_jwt_identity())
+    return sse_response(current_id)
 
 
 @reader_bp.route('/editors/<int:editor_id>/books', methods=['GET'])
@@ -482,6 +758,30 @@ def list_editor_books(editor_id):
 
 @reader_bp.route('/books', methods=['GET'])
 def list_all_books():
+    """
+    Listar catálogo de livros (paginado)
+    ---
+    tags:
+      - Público
+    parameters:
+      - name: page
+        in: query
+        type: integer
+        required: false
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        required: false
+        default: 12
+      - name: genero
+        in: query
+        type: string
+        required: false
+    responses:
+      200:
+        description: Lista paginada de livros com status_estoque
+    """
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 12, type=int)
     genero = request.args.get('genero', '')
@@ -529,9 +829,24 @@ def search():
     ---
     tags:
       - Público
+    parameters:
+      - name: q
+        in: query
+        type: string
+        required: false
+        description: Termo de busca (título, autor, nome)
+      - name: genero
+        in: query
+        type: string
+        required: false
+      - name: limit
+        in: query
+        type: integer
+        required: false
+        default: 8
     responses:
       200:
-        description: Resultado da busca global
+        description: books, users, editors (listas vazias se q e genero ausentes)
     """
     q = (request.args.get("q") or "").strip()
     genero = (request.args.get("genero") or "").strip()
@@ -625,9 +940,16 @@ def get_book_details(id):
     ---
     tags:
       - Público
+    security:
+      - Bearer: []
+    parameters:
+      - name: id
+        in: path
+        type: integer
+        required: true
     responses:
       200:
-        description: Detalhes do livro
+        description: Detalhes do livro; inclui my_reading se JWT de leitor válido
       404:
         description: Livro não encontrado
     """
@@ -769,6 +1091,35 @@ def create_reading():
 @reader_bp.route("/readings", methods=["GET"])
 @jwt_required()
 def list_readings():
+    """
+    Listar leituras (do usuário logado ou de outro leitor)
+    ---
+    tags:
+      - Leitor
+    security:
+      - Bearer: []
+    parameters:
+      - name: user_id
+        in: query
+        type: integer
+        required: false
+        description: ID do leitor; padrão é o usuário autenticado
+      - name: page
+        in: query
+        type: integer
+        required: false
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        required: false
+        default: 10
+    responses:
+      200:
+        description: Lista paginada de registros de leitura
+      401:
+        description: Não autenticado
+    """
     current_user_id = int(get_jwt_identity())
     # Se user_id for passado na query, usa ele (para perfis públicos), caso contrário usa o logado
     target_user_id = request.args.get('user_id', current_user_id, type=int)
@@ -815,6 +1166,23 @@ def list_readings():
 def delete_reading(reading_id):
     """
     Remover um registro de leitura (Apenas Leitor)
+    ---
+    tags:
+      - Leitor
+    security:
+      - Bearer: []
+    parameters:
+      - name: reading_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Leitura removida
+      404:
+        description: Registro não encontrado
+      403:
+        description: Acesso negado
     """
     leitor_id = int(get_jwt_identity())
     leitura = Leitura.query.filter_by(id=reading_id, leitor_id=leitor_id).first()
@@ -833,7 +1201,24 @@ from sqlalchemy import func
 @reader_bp.route('/recommendations', methods=['GET'])
 def get_recommendations():
     """
-    Obter recomendações de livros baseadas em avaliações com paginação
+    Recomendações de livros por média de avaliações
+    ---
+    tags:
+      - Público
+    parameters:
+      - name: page
+        in: query
+        type: integer
+        required: false
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        required: false
+        default: 6
+    responses:
+      200:
+        description: Lista paginada com average_rating por livro
     """
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 6, type=int)
@@ -868,6 +1253,26 @@ def get_recommendations():
 
 @reader_bp.route("/feed", methods=["GET"])
 def feed():
+    """
+    Feed público de atividades de leitura
+    ---
+    tags:
+      - Público
+    parameters:
+      - name: page
+        in: query
+        type: integer
+        required: false
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        required: false
+        default: 20
+    responses:
+      200:
+        description: Lista paginada de leituras recentes da comunidade
+    """
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     
@@ -920,6 +1325,8 @@ def create_request():
           type: object
           properties:
             editor_id:
+              type: integer
+            livro_id:
               type: integer
             conteudo:
               type: string
@@ -977,9 +1384,29 @@ def create_purchase():
       - Leitor
     security:
       - Bearer: []
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - livro_id
+          properties:
+            livro_id:
+              type: integer
+            quantidade:
+              type: integer
+              default: 1
     responses:
       201:
         description: Compra registrada
+      400:
+        description: Quantidade inválida ou estoque insuficiente
+      404:
+        description: Livro não encontrado
+      403:
+        description: Acesso negado
     """
     leitor_id = int(get_jwt_identity())
     data = request.get_json() or {}
@@ -1018,6 +1445,19 @@ def create_purchase():
 @jwt_required()
 @verificar_leitor
 def list_my_purchases():
+    """
+    Listar compras do leitor autenticado
+    ---
+    tags:
+      - Leitor
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Histórico de compras com dados do livro
+      403:
+        description: Acesso negado
+    """
     leitor_id = int(get_jwt_identity())
     rows = Compra.query.filter_by(leitor_id=leitor_id).order_by(Compra.data_compra.desc()).all()
     return jsonify(
@@ -1044,6 +1484,30 @@ def list_my_purchases():
 @jwt_required()
 @verificar_leitor
 def get_my_requests():
+    """
+    Listar solicitações do leitor autenticado
+    ---
+    tags:
+      - Leitor
+    security:
+      - Bearer: []
+    parameters:
+      - name: page
+        in: query
+        type: integer
+        required: false
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        required: false
+        default: 10
+    responses:
+      200:
+        description: Lista paginada de solicitações às editoras
+      403:
+        description: Acesso negado
+    """
     leitor_id = int(get_jwt_identity())
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
@@ -1077,6 +1541,30 @@ def get_my_requests():
 @reader_bp.route('/conversations', methods=['GET'])
 @jwt_required()
 def list_conversations():
+    """
+    Listar conversas do usuário autenticado
+    ---
+    tags:
+      - Mensagens
+    security:
+      - Bearer: []
+    parameters:
+      - name: page
+        in: query
+        type: integer
+        required: false
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        required: false
+        default: 15
+    responses:
+      200:
+        description: Lista paginada de conversas com última mensagem e contagem de não lidas
+      401:
+        description: Não autenticado
+    """
     current_id = int(get_jwt_identity())
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 15, type=int)
@@ -1133,6 +1621,55 @@ def list_conversations():
 @jwt_required()
 @verificar_leitor
 def create_order():
+    """
+    Finalizar pedido (checkout) com múltiplos itens
+    ---
+    tags:
+      - Leitor
+    security:
+      - Bearer: []
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  livro_id:
+                    type: integer
+                  quantidade:
+                    type: integer
+            rua:
+              type: string
+            numero:
+              type: string
+            bairro:
+              type: string
+            cidade:
+              type: string
+            estado:
+              type: string
+            cep:
+              type: string
+            metodo_pagamento:
+              type: string
+    responses:
+      201:
+        description: Pedido criado (pedido_id, total)
+      400:
+        description: Carrinho vazio ou estoque insuficiente
+      500:
+        description: Erro interno ao processar pedido
+      403:
+        description: Acesso negado
+    """
     current_id = int(get_jwt_identity())
     data = request.get_json() or {}
 
@@ -1211,6 +1748,30 @@ def create_order():
 @reader_bp.route('/orders', methods=['GET'])
 @jwt_required()
 def list_orders():
+    """
+    Listar pedidos do leitor autenticado
+    ---
+    tags:
+      - Leitor
+    security:
+      - Bearer: []
+    parameters:
+      - name: page
+        in: query
+        type: integer
+        required: false
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        required: false
+        default: 8
+    responses:
+      200:
+        description: Lista paginada de pedidos com itens
+      401:
+        description: Não autenticado
+    """
     current_id = int(get_jwt_identity())
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 8, type=int)
@@ -1245,6 +1806,31 @@ def list_orders():
 @reader_bp.route('/profile', methods=['PUT'])
 @jwt_required()
 def update_profile():
+    """
+    Atualizar perfil do usuário autenticado
+    ---
+    tags:
+      - Perfil
+    security:
+      - Bearer: []
+    parameters:
+      - name: body
+        in: body
+        schema:
+          type: object
+          properties:
+            nome:
+              type: string
+            headline:
+              type: string
+            bio:
+              type: string
+    responses:
+      200:
+        description: Perfil atualizado
+      404:
+        description: Usuário não encontrado
+    """
     current_id = int(get_jwt_identity())
     user = User.query.get(current_id)
     if not user:
@@ -1264,6 +1850,28 @@ def update_profile():
 @reader_bp.route('/profile/photo', methods=['POST'])
 @jwt_required()
 def update_profile_photo():
+    """
+    Atualizar foto de perfil
+    ---
+    tags:
+      - Perfil
+    security:
+      - Bearer: []
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: imagem
+        in: formData
+        type: file
+        required: true
+    responses:
+      200:
+        description: Foto atualizada (imagem_url)
+      400:
+        description: Nenhum arquivo enviado
+      404:
+        description: Usuário não encontrado
+    """
     current_id = int(get_jwt_identity())
     user = User.query.get(current_id)
     if not user:
@@ -1285,6 +1893,35 @@ def update_profile_photo():
 @reader_bp.route('/profile/password', methods=['PUT'])
 @jwt_required()
 def update_password():
+    """
+    Alterar senha do usuário autenticado
+    ---
+    tags:
+      - Perfil
+    security:
+      - Bearer: []
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - senha_atual
+            - nova_senha
+          properties:
+            senha_atual:
+              type: string
+            nova_senha:
+              type: string
+    responses:
+      200:
+        description: Senha alterada
+      400:
+        description: Campos obrigatórios ou senha atual incorreta
+      404:
+        description: Usuário não encontrado
+    """
     current_id = int(get_jwt_identity())
     user = User.query.get(current_id)
     if not user:
@@ -1307,6 +1944,19 @@ def update_password():
 @reader_bp.route('/profile', methods=['DELETE'])
 @jwt_required()
 def delete_account():
+    """
+    Excluir conta do usuário autenticado
+    ---
+    tags:
+      - Perfil
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Conta removida permanentemente
+      404:
+        description: Usuário não encontrado
+    """
     current_id = int(get_jwt_identity())
     user = User.query.get(current_id)
     if not user:

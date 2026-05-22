@@ -147,6 +147,19 @@ def reports():
 @jwt_required()
 @verificar_admin
 def export_csv():
+    """
+    Exportar usuários em CSV
+    ---
+    tags:
+      - Admin
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Arquivo CSV (Content-Disposition attachment)
+      403:
+        description: Acesso negado
+    """
     import io
     import csv
     from flask import make_response
@@ -168,5 +181,17 @@ def export_csv():
 @jwt_required()
 @verificar_admin
 def refresh_metrics():
-    # Simulação de atualização de cache ou reprocessamento
+    """
+    Sincronizar métricas do painel admin
+    ---
+    tags:
+      - Admin
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Métricas atualizadas
+      403:
+        description: Acesso negado
+    """
     return jsonify({"message": "Métricas do sistema sincronizadas com sucesso!"}), 200

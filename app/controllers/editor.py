@@ -139,7 +139,32 @@ def respond_request(id):
 @jwt_required()
 @verificar_editor
 def lookup_books():
-    """Buscar metadados de livros na Open Library (autopreenchimento do cadastro)."""
+    """
+    Buscar metadados de livros na Open Library
+    ---
+    tags:
+      - Editor
+    security:
+      - Bearer: []
+    parameters:
+      - name: q
+        in: query
+        type: string
+        required: true
+        description: Termo de busca (mínimo 2 caracteres)
+      - name: limit
+        in: query
+        type: integer
+        required: false
+        default: 8
+    responses:
+      200:
+        description: Lista de sugestões (fonte open_library)
+      400:
+        description: Termo de busca muito curto
+      503:
+        description: Serviço de busca indisponível
+    """
     q = (request.args.get("q") or "").strip()
     limit = request.args.get("limit", 8, type=int)
 
@@ -160,6 +185,35 @@ def lookup_books():
 def list_books():
     """
     Listar livros da editora com busca e paginação (Apenas Editor)
+    ---
+    tags:
+      - Editor
+    security:
+      - Bearer: []
+    parameters:
+      - name: page
+        in: query
+        type: integer
+        required: false
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        required: false
+        default: 10
+      - name: q
+        in: query
+        type: string
+        required: false
+      - name: genero
+        in: query
+        type: string
+        required: false
+    responses:
+      200:
+        description: Lista paginada de livros da editora
+      403:
+        description: Acesso negado
     """
     editor_id = int(get_jwt_identity())
     page = request.args.get('page', 1, type=int)
@@ -392,8 +446,24 @@ def update_book(id):
 @verificar_editor
 def delete_book(id):
     """
-    Remover um livro do catálogo de vendas (Apenas Editor)
-    Zera o estoque para preservar o histórico de leitores e pedidos.
+    Remover um livro do catálogo de vendas (estoque zerado)
+    ---
+    tags:
+      - Editor
+    security:
+      - Bearer: []
+    parameters:
+      - name: id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Livro removido do catálogo (estoque zerado)
+      404:
+        description: Livro não encontrado
+      403:
+        description: Acesso negado
     """
     editor_id = int(get_jwt_identity())
     livro = Livro.query.filter_by(id=id, editor_id=editor_id).first()
