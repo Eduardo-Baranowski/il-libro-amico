@@ -3,24 +3,50 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: user_livro
-      POSTGRES_PASSWORD: senha_segura_123
-      POSTGRES_DB: il_libro_amico_db
+      POSTGRES_USER: ${POSTGRES_USER:-user_livro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-senha_segura_123}
+      POSTGRES_DB: ${POSTGRES_DB:-il_libro_amico_db}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user_livro} -d ${POSTGRES_DB:-il_libro_amico_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   web:
     build: .
     ports:
       - "5000:5000"
-    env_file:
-      - .env
+    environment:
+      FLASK_APP: run.py
+      FLASK_DEBUG: ${FLASK_DEBUG:-0}
+      SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      DATABASE_URI: postgresql+psycopg://${POSTGRES_USER:-user_livro}:${POSTGRES_PASSWORD:-senha_segura_123}@db:5432/${POSTGRES_DB:-il_libro_amico_db}
+      ADMIN_INITIAL_EMAIL: ${ADMIN_INITIAL_EMAIL:-admin@sistema.com.br}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-senha_provisoria_segura}
+      DB_WAIT_MAX_ATTEMPTS: ${DB_WAIT_MAX_ATTEMPTS:-30}
+      DB_WAIT_SLEEP_SECONDS: ${DB_WAIT_SLEEP_SECONDS:-2}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
       - ./instance:/app/instance
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5000}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - web
     restart: unless-stopped
 
 volumes:

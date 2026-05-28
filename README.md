@@ -57,6 +57,27 @@ python run.py
 
 A documentação interativa da API (Swagger) estará disponível em: `http://127.0.0.1:5000/apidocs/`
 
+1. Faça login em `POST /auth/login` e copie o campo `token_sessao`.
+2. Clique em **Authorize** (cadeado) e cole **somente o token** (sem `Bearer`).
+3. O Swagger adiciona o prefixo `Bearer` automaticamente nas requisições.
+
+## Docker Compose
+
+Para subir backend + frontend + PostgreSQL com um único comando:
+
+```bash
+cp .env.docker.example .env
+# edite SECRET_KEY e JWT_SECRET_KEY com valores >= 32 caracteres
+docker compose up --build
+```
+
+Serviços expostos:
+- API Flask: `http://127.0.0.1:5000`
+- Swagger: `http://127.0.0.1:5000/apidocs/`
+- Frontend: `http://127.0.0.1:5173`
+
+No bootstrap do container backend, o projeto executa `flask db upgrade` e cria o admin inicial automaticamente (se não existir).
+
 ## Frontend (React + TypeScript)
 
 O frontend está em `frontend/` (Vite + React + TypeScript) e já está integrado com a API via proxy em desenvolvimento.

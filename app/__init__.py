@@ -56,14 +56,33 @@ def create_app():
             }
         ],
         'headers': [],
+        'auth': {},
         'securityDefinitions': {
             'Bearer': {
                 'type': 'apiKey',
                 'name': 'Authorization',
                 'in': 'header',
-                'description': 'JWT Authorization header using the Bearer scheme. Example: "Bearer {token}"'
+                'description': (
+                    'Cole apenas o token retornado por POST /auth/login '
+                    '(campo token_sessao). O prefixo Bearer é aplicado automaticamente.'
+                ),
             }
-        }
+        },
+        # Swagger UI envia o token cru no header; o interceptor adiciona "Bearer ".
+        'ui_params_text': (
+            '{'
+            'requestInterceptor: function(req) {'
+            '  if (req.headers && req.headers.Authorization) {'
+            '    var value = String(req.headers.Authorization).trim();'
+            '    if (value && !/^Bearer\\s/i.test(value)) {'
+            '      req.headers.Authorization = "Bearer " + value;'
+            '    }'
+            '  }'
+            '  return req;'
+            '},'
+            'persistAuthorization: true'
+            '}'
+        ),
     }
     Swagger(app)
 
