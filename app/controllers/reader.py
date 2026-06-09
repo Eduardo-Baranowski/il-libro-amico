@@ -8,6 +8,8 @@ from ..models.follow import Follow
 from ..models.friendship import Friendship
 from ..models.message import Message
 from ..models.pedido import Pedido, ItemPedido
+from ..models.feed_like import FeedLike
+from ..models.feed_comment import FeedComment
 from .. import db, bcrypt
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from functools import wraps
@@ -20,6 +22,50 @@ from ..realtime import publish
 from ..realtime.stream import sse_response
 
 reader_bp = Blueprint('reader', __name__)
+
+
+def _optional_user_id():
+    from flask_jwt_extended import verify_jwt_in_request
+
+    try:
+        verify_jwt_in_request(optional=True)
+        uid = get_jwt_identity()
+        return int(uid) if uid else None
+    except Exception:
+        return None
+
+
+def _feed_item_dict(r, viewer_id=None):
+    likes_count = FeedLike.query.filter_by(leitura_id=r.id).count()
+    comments_count = FeedComment.query.filter_by(leitura_id=r.id).count()
+    liked_by_me = False
+    if viewer_id:
+        liked_by_me = (
+            FeedLike.query.filter_by(leitura_id=r.id, user_id=viewer_id).first()
+            is not None
+        )
+    return {
+        "id": r.id,
+        "leitor": {
+            "id": r.leitor.id,
+            "nome": r.leitor.nome,
+            "imagem_url": image_url(r.leitor.imagem),
+        },
+        "livro": {
+            "id": r.livro.id,
+            "titulo": r.livro.titulo,
+            "autor": r.livro.autor,
+            "imagem_url": image_url(r.livro.imagem),
+        },
+        "status": r.status,
+        "nota": r.nota,
+        "comentario": r.comentario,
+        "criado_em": r.criado_em.isoformat() if r.criado_em else None,
+        "likes_count": likes_count,
+        "comments_count": comments_count,
+        "liked_by_me": liked_by_me,
+    }
+
 
 def verificar_leitor(f):
     @wraps(f)
@@ -785,10 +831,13 @@ def list_all_books():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 12, type=int)
     genero = request.args.get('genero', '')
+    condicao = request.args.get('condicao', '')
 
     query = Livro.query
     if genero:
         query = query.filter_by(genero=genero)
+    if condicao:
+        query = query.filter_by(condicao=condicao)
     
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     books = pagination.items
@@ -800,6 +849,7 @@ def list_all_books():
                 "titulo": b.titulo,
                 "autor": b.autor,
                 "genero": b.genero,
+                "condicao": b.condicao or "novo",
                 "preco": str(b.preco),
                 "estoque": b.estoque,
                 "editor_id": b.editor_id,
@@ -991,6 +1041,8 @@ def get_book_details(id):
             else "disponivel"
         ),
         "descricao": b.descricao,
+        "genero": b.genero,
+        "condicao": b.condicao or "novo",
         "imagem": b.imagem,
         "imagem_url": image_url(b.imagem),
         "editora": b.editor.nome,
@@ -1126,10 +1178,14 @@ def list_readings():
     
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
-    
+    status = (request.args.get('status') or '').strip()
+
+    query = Leitura.query.filter_by(leitor_id=target_user_id)
+    if status:
+        query = query.filter_by(status=status)
+
     pagination = (
-        Leitura.query.filter_by(leitor_id=target_user_id)
-        .order_by(Leitura.atualizado_em.desc(), Leitura.criado_em.desc())
+        query.order_by(Leitura.atualizado_em.desc(), Leitura.criado_em.desc())
         .paginate(page=page, per_page=per_page, error_out=False)
     )
     rows = pagination.items
@@ -1252,6 +1308,7 @@ def get_recommendations():
     }), 200
 
 @reader_bp.route("/feed", methods=["GET"])
+@jwt_required(optional=True)
 def feed():
     """
     Feed público de atividades de leitura
@@ -1275,36 +1332,114 @@ def feed():
     """
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    
+    viewer_id = _optional_user_id()
+
     pagination = Leitura.query.order_by(Leitura.criado_em.desc()).paginate(page=page, per_page=per_page, error_out=False)
     rows = pagination.items
-    
+
     return jsonify({
-        "items": [
-            {
-                "id": r.id,
-                "leitor": {
-                    "id": r.leitor.id,
-                    "nome": r.leitor.nome,
-                    "imagem_url": image_url(r.leitor.imagem),
-                },
-                "livro": {
-                    "id": r.livro.id,
-                    "titulo": r.livro.titulo,
-                    "autor": r.livro.autor,
-                    "imagem_url": image_url(r.livro.imagem),
-                },
-                "status": r.status,
-                "nota": r.nota,
-                "comentario": r.comentario,
-                "criado_em": r.criado_em.isoformat() if r.criado_em else None,
-            }
-            for r in rows
-        ],
+        "items": [_feed_item_dict(r, viewer_id) for r in rows],
         "total": pagination.total,
         "page": pagination.page,
         "pages": pagination.pages
     }), 200
+
+
+@reader_bp.route("/feed/<int:reading_id>/like", methods=["POST"])
+@jwt_required()
+def toggle_feed_like(reading_id):
+    """Curtir ou remover curtida de uma atividade do feed."""
+    user_id = int(get_jwt_identity())
+    leitura = Leitura.query.get_or_404(reading_id)
+    existing = FeedLike.query.filter_by(leitura_id=leitura.id, user_id=user_id).first()
+    if existing:
+        db.session.delete(existing)
+        db.session.commit()
+        liked = False
+    else:
+        db.session.add(FeedLike(leitura_id=leitura.id, user_id=user_id))
+        db.session.commit()
+        liked = True
+    count = FeedLike.query.filter_by(leitura_id=leitura.id).count()
+    return jsonify({"liked": liked, "likes_count": count}), 200
+
+
+@reader_bp.route("/feed/<int:reading_id>/comments", methods=["GET"])
+def list_feed_comments(reading_id):
+    """Listar comentários de uma atividade do feed."""
+    Leitura.query.get_or_404(reading_id)
+    rows = (
+        FeedComment.query.filter_by(leitura_id=reading_id)
+        .order_by(FeedComment.criado_em.asc())
+        .all()
+    )
+    return jsonify([
+        {
+            "id": c.id,
+            "user_id": c.user_id,
+            "user_nome": c.user.nome if c.user else "",
+            "user_imagem_url": image_url(c.user.imagem) if c.user else None,
+            "conteudo": c.conteudo,
+            "criado_em": c.criado_em.isoformat() if c.criado_em else None,
+        }
+        for c in rows
+    ]), 200
+
+
+@reader_bp.route("/feed/<int:reading_id>/comments", methods=["POST"])
+@jwt_required()
+def create_feed_comment(reading_id):
+    """Comentar em uma atividade do feed."""
+    user_id = int(get_jwt_identity())
+    Leitura.query.get_or_404(reading_id)
+    data = request.get_json() or {}
+    conteudo = (data.get("conteudo") or "").strip()
+    if not conteudo:
+        return jsonify({"message": "Comentário não pode ser vazio"}), 400
+    if len(conteudo) > 2000:
+        return jsonify({"message": "Comentário muito longo"}), 400
+    comment = FeedComment(leitura_id=reading_id, user_id=user_id, conteudo=conteudo)
+    db.session.add(comment)
+    db.session.commit()
+    count = FeedComment.query.filter_by(leitura_id=reading_id).count()
+    return jsonify({
+        "id": comment.id,
+        "comments_count": count,
+        "message": "Comentário publicado",
+    }), 201
+
+
+@reader_bp.route("/books/<int:book_id>/reviews", methods=["GET"])
+def book_reviews(book_id):
+    """Resenhas da comunidade (leituras com nota ou comentário)."""
+    Livro.query.get_or_404(book_id)
+    rows = (
+        Leitura.query.filter_by(livro_id=book_id)
+        .filter(
+            db.or_(
+                Leitura.nota.isnot(None),
+                Leitura.comentario.isnot(None),
+            )
+        )
+        .order_by(Leitura.criado_em.desc())
+        .limit(50)
+        .all()
+    )
+    return jsonify([
+        {
+            "id": r.id,
+            "leitor_id": r.leitor_id,
+            "leitor_nome": r.leitor.nome if r.leitor else "",
+            "leitor_imagem_url": image_url(r.leitor.imagem) if r.leitor else None,
+            "nota": r.nota,
+            "comentario": r.comentario,
+            "status": r.status,
+            "criado_em": r.criado_em.isoformat() if r.criado_em else None,
+        }
+        for r in rows
+        if (r.nota is not None) or (r.comentario and r.comentario.strip())
+    ]), 200
+
 
 @reader_bp.route('/requests', methods=['POST'])
 @jwt_required()

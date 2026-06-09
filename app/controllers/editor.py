@@ -243,6 +243,7 @@ def list_books():
                 "titulo": b.titulo,
                 "autor": b.autor,
                 "genero": b.genero,
+                "condicao": b.condicao or "novo",
                 "preco": str(b.preco),
                 "estoque": b.estoque,
                 "descricao": b.descricao,
@@ -298,6 +299,7 @@ def create_book():
     preco = _parse_preco(request.form.get("preco"))
     estoque = request.form.get("estoque", 0, type=int)
     genero = request.form.get("genero", "")
+    condicao = request.form.get("condicao", "novo") or "novo"
     descricao = request.form.get("descricao")
 
     if estoque < 0:
@@ -325,6 +327,7 @@ def create_book():
         preco=preco,
         estoque=estoque,
         genero=genero,
+        condicao=condicao,
         descricao=descricao,
         imagem=imagem_path
     )
@@ -392,6 +395,8 @@ def update_book(id):
         livro.estoque = request.form.get("estoque", type=int)
     if "genero" in request.form:
         livro.genero = request.form.get("genero")
+    if "condicao" in request.form:
+        livro.condicao = request.form.get("condicao") or "novo"
     if "preco" in request.form:
         preco = _parse_preco(request.form.get("preco"))
         if preco is None:

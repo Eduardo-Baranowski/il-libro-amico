@@ -36,4 +36,7 @@ def criar_admin_inicial():
 if __name__ == "__main__":
     criar_admin_inicial()
     debug = os.environ.get("FLASK_DEBUG", "0") not in ("0", "false", "False")
-    app.run(debug=debug, host="127.0.0.1", port=int(os.environ.get("PORT", "5000")))
+    host = os.environ.get("FLASK_HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "5000"))
+    print(f"API em http://{host}:{port}  (emulador Genymotion: http://10.0.3.2:{port})")
+    app.run(debug=debug, host=host, port=port)
