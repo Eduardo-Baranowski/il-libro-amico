@@ -86,6 +86,33 @@ def _parse_positive_int(value, field_name: str = "quantidade"):
         return None, f"{field_name} deve ser maior que zero"
     return n, None
 
+@reader_bp.route('/random-quote', methods=['GET'])
+def get_random_quote():
+    """
+    Obter uma frase aleatória (comentário de leitura) do banco de dados
+    ---
+    tags:
+      - Público
+    responses:
+      200:
+        description: Uma frase aleatória, autor e livro
+    """
+    from sqlalchemy.sql import func
+    leitura = Leitura.query.filter(Leitura.comentario.isnot(None), Leitura.comentario != '').order_by(func.random()).first()
+    if leitura:
+        return jsonify({
+            "quote": leitura.comentario,
+            "author": leitura.livro.autor,
+            "book": leitura.livro.titulo
+        }), 200
+        
+    return jsonify({
+        "quote": "Eles passarão... Eu passarinho!",
+        "author": "Mário Quintana",
+        "book": "A Rua dos Cataventos"
+    }), 200
+
+
 @reader_bp.route('/editors', methods=['GET'])
 def list_editors():
     """
@@ -1018,6 +1045,7 @@ def get_book_details(id):
                 r = Leitura.query.filter_by(leitor_id=user.id, livro_id=b.id).first()
                 if r:
                     my_reading = {
+                        "id": r.id,
                         "status": r.status,
                         "nota": r.nota,
                         "comentario": r.comentario
@@ -1216,6 +1244,79 @@ def list_readings():
     }), 200
 
 
+@reader_bp.route("/readings/<int:reading_id>", methods=["PUT"])
+@jwt_required()
+@verificar_leitor
+def update_reading(reading_id):
+    """
+    Atualizar um registro de leitura por ID (Apenas Leitor)
+    ---
+    tags:
+      - Leitor
+    security:
+      - Bearer: []
+    parameters:
+      - name: reading_id
+        in: path
+        type: integer
+        required: true
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [quero_ler, lendo, lido]
+            nota:
+              type: integer
+              minimum: 1
+              maximum: 5
+            comentario:
+              type: string
+    responses:
+      200:
+        description: Leitura atualizada
+      404:
+        description: Registro não encontrado
+      400:
+        description: Dados inválidos
+    """
+    leitor_id = int(get_jwt_identity())
+    leitura = Leitura.query.filter_by(id=reading_id, leitor_id=leitor_id).first()
+    
+    if not leitura:
+        return jsonify({"message": "Registro de leitura não encontrado"}), 404
+        
+    data = request.get_json() or {}
+    
+    if 'status' in data:
+        status = data.get('status')
+        if status not in ("quero_ler", "lendo", "lido"):
+            return jsonify({"message": "status inválido"}), 400
+        leitura.status = status
+        
+    if 'nota' in data:
+        nota = data.get('nota')
+        if nota is not None:
+            try:
+                nota_int = int(nota)
+            except (TypeError, ValueError):
+                return jsonify({"message": "nota inválida"}), 400
+            if nota_int < 1 or nota_int > 5:
+                return jsonify({"message": "nota deve ser entre 1 e 5"}), 400
+            leitura.nota = nota_int
+        else:
+            leitura.nota = None
+            
+    if 'comentario' in data:
+        leitura.comentario = data.get('comentario')
+        
+    db.session.commit()
+    return jsonify({"message": "Leitura atualizada com sucesso", "id": leitura.id}), 200
+
+
 @reader_bp.route("/readings/<int:reading_id>", methods=["DELETE"])
 @jwt_required()
 @verificar_leitor
@@ -1245,6 +1346,10 @@ def delete_reading(reading_id):
     
     if not leitura:
         return jsonify({"message": "Registro de leitura não encontrado"}), 404
+
+    # Remove registros filhos para evitar violação de foreign key
+    FeedLike.query.filter_by(leitura_id=leitura.id).delete()
+    FeedComment.query.filter_by(leitura_id=leitura.id).delete()
         
     db.session.delete(leitura)
     db.session.commit()
@@ -1937,6 +2042,49 @@ def list_orders():
     }), 200
 
 # --- PROFILE MANAGEMENT ---
+
+@reader_bp.route('/profile', methods=['GET'])
+@jwt_required()
+def get_profile():
+    """
+    Obter perfil do usuário autenticado com estatísticas
+    ---
+    tags:
+      - Perfil
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Perfil do usuário autenticado com estatísticas
+      404:
+        description: Usuário não encontrado
+    """
+    current_id = int(get_jwt_identity())
+    user = User.query.get(current_id)
+    if not user:
+        return jsonify({"message": "Usuário não encontrado"}), 404
+        
+    total_readings = Leitura.query.filter_by(leitor_id=user.id, status='lido').count()
+    total_publications = Livro.query.filter_by(editor_id=user.id).count()
+    followers_count = Follow.query.filter_by(following_id=user.id).count()
+    
+    return jsonify({
+        "user": {
+            "id": user.id,
+            "nome": user.nome,
+            "email": user.email,
+            "papel": user.papel,
+            "imagem_url": image_url(user.imagem),
+            "headline": user.headline or "Leitor da comunidade",
+            "bio": user.bio or "Sem biografia ainda.",
+        },
+        "stats": {
+            "lidos": total_readings,
+            "venda": total_publications,
+            "seguidores": followers_count,
+        },
+        "generos": ["Ficção Histórica", "Filosofia", "Clássicos"]
+    }), 200
 
 @reader_bp.route('/profile', methods=['PUT'])
 @jwt_required()

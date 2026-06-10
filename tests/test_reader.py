@@ -47,6 +47,28 @@ def test_reader_create_reading_rejects_invalid_nota(client, reader_token, editor
     assert resp.get_json()["message"] == "nota deve ser entre 1 e 5"
 
 
+def test_reader_delete_reading_success(client, reader_token, editor_book, auth_header):
+    # First, create a reading
+    resp_create = client.post(
+        "/reader/readings",
+        json={"livro_id": editor_book.id, "status": "lendo", "nota": 4, "comentario": "Bom livro"},
+        headers=auth_header(reader_token),
+    )
+    assert resp_create.status_code == 201
+    reading_id = resp_create.get_json()["id"]
+
+    # Delete the reading
+    resp_delete = client.delete(
+        f"/reader/readings/{reading_id}",
+        headers=auth_header(reader_token),
+    )
+    assert resp_delete.status_code == 200
+    assert resp_delete.get_json()["message"] == "Leitura removida com sucesso"
+
+    # Verify that it is deleted from the DB
+    assert Leitura.query.get(reading_id) is None
+
+
 def test_reader_routes_forbid_non_reader(client, editor_token, editor_user, auth_header):
     resp = client.post(
         "/reader/requests",

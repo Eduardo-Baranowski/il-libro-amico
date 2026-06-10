@@ -396,4 +396,28 @@ REAL_BOOKS: list[tuple[str, str, str, str, int, str]] = [
         23,
         "Elizabeth Bennet, Mr. Darcy e as convenções da Inglaterra georgiana.",
     ),
+    (
+        "A Rua dos Cataventos",
+        "Mário Quintana",
+        "Poesia",
+        "29.90",
+        15,
+        "Eles passarão... Eu passarinho! Primeiro livro de sonetos de Mário Quintana, publicado em 1940.",
+    ),
+    (
+        "Caderno de Hinos",
+        "Mário Quintana",
+        "Poesia",
+        "24.90",
+        20,
+        "Se as coisas são inatingíveis... ora! Não é motivo para não querê-las... Que tristes seriam os caminhos se não fora a presença distante das estrelas.",
+    ),
+    (
+        "Apontamentos de História Sem Importância",
+        "Mário Quintana",
+        "Poesia",
+        "34.90",
+        10,
+        "O tempo é um ponto de vista. Velho é quem é um dia mais velho que a gente. Pensamentos sobre o tempo, a infância e o cotidiano.",
+    ),
 ]
